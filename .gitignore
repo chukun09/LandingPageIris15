@@ -1,0 +1,82 @@
+# =========================================================================
+# .gitignore for Hybrid .NET Core Backend & React/TypeScript Frontend
+# =========================================================================
+
+# -------------------------------------------------------------------------
+# 1. .NET Core & C# Build / Tooling
+# -------------------------------------------------------------------------
+[Bb]in/
+[Oo]bj/
+[Log]/
+[Pp]ublish/
+[Pp]ublish-win/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+.vs/
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/launch.json
+
+# -------------------------------------------------------------------------
+# 2. SQLite Database Files
+# -------------------------------------------------------------------------
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+
+# -------------------------------------------------------------------------
+# 3. Node.js & Frontend Tooling
+# -------------------------------------------------------------------------
+node_modules/
+Frontend/node_modules/
+dist/
+dist-ssr/
+Frontend/dist/
+Frontend/dist-ssr/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.eslintcache
+.stylelintcache
+
+# -------------------------------------------------------------------------
+# 4. Environment Variables / Secrets
+# -------------------------------------------------------------------------
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+Frontend/.env
+Frontend/.env.local
+Frontend/.env.development.local
+Frontend/.env.test.local
+Frontend/.env.production.local
+
+# -------------------------------------------------------------------------
+# 5. Compiled Static Assets (Frontend Build Output in wwwroot)
+# -------------------------------------------------------------------------
+wwwroot/assets/
+wwwroot/index.html
+
+# -------------------------------------------------------------------------
+# 6. User Uploads / Runtime Dynamic Files
+# -------------------------------------------------------------------------
+wwwroot/uploads/
+wwwroot/uploads/original/*
+wwwroot/uploads/thumbnail/*
+wwwroot/uploads/podcasts/*
+wwwroot/uploads/temp/*
+temp_img.png
+
+# -------------------------------------------------------------------------
+# 7. OS / IDE System Files
+# -------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini

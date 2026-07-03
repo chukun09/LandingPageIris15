@@ -1,0 +1,34 @@
+@baseUrl = http://localhost:5062
+
+### 1. Lấy danh sách các bài viết kỷ niệm đã duyệt hiển thị trên Bức tường
+GET {{baseUrl}}/api/posts
+
+### 2. CBNV thả tim bình chọn bài viết (Thay 1 bằng ID bài đăng cụ thể)
+POST {{baseUrl}}/api/posts/1/vote
+
+### 3. Lấy danh sách các tập Podcast phát thanh hàng ngày
+GET {{baseUrl}}/api/podcasts
+
+### 4. Admin: Lấy danh sách bài đăng chờ duyệt (Dành cho Ban tổ chức)
+GET {{baseUrl}}/api/admin/posts/pending
+
+### 5. Admin: Duyệt hoặc từ chối bài viết (Thay 1 bằng ID bài đăng cụ thể)
+POST {{baseUrl}}/api/admin/posts/1/approve
+Content-Type: application/json
+
+{
+  "approve": true
+}
+
+### 6. Admin: Tạo Podcast từ bài viết đã duyệt (Thay 1 bằng ID bài đăng, điền API key nếu chưa config trong appsettings.json)
+POST {{baseUrl}}/api/admin/posts/1/podcast
+Content-Type: application/json
+
+{
+  "title": "Radio IRIS 15 - Số phát thanh đặc biệt",
+  "apiKey": "",
+  "region": "southeastasia"
+}
+
+### 7. Admin: Tải ảnh in ấn Backdrop check-in độ phân giải cao
+GET {{baseUrl}}/api/admin/backdrop
