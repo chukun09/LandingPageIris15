@@ -136,7 +136,7 @@ public sealed class PostService : IPostService
                 new MemoryPost
                 {
                     Message = "Chúc mừng sinh nhật IRIS tròn 15 tuổi! Tự hào là một mảnh ghép của đại gia đình IRIS thân thương. Chúc công ty ngày càng phát triển vững mạnh và vươn xa hơn nữa!",
-                    Department = "Phòng Công Nghệ",
+                    Department = "Phát triển phần mềm",
                     OriginalImagePath = "/uploads/original/mock_teambuilding.png",
                     ThumbnailImagePath = "/uploads/thumbnail/mock_teambuilding.png",
                     VoteCount = 35,
@@ -146,7 +146,7 @@ public sealed class PostService : IPostService
                 new MemoryPost
                 {
                     Message = "15 năm - một chặng đường nhiều thử thách nhưng cũng đầy vinh quang. Cảm ơn IRIS đã luôn là ngôi nhà thứ hai tuyệt vời của tôi, nơi tôi được học hỏi và lớn khôn mỗi ngày.",
-                    Department = "Khối Kinh Doanh",
+                    Department = "P Kinh doanh",
                     OriginalImagePath = "/uploads/original/mock_office.png",
                     ThumbnailImagePath = "/uploads/thumbnail/mock_office.png",
                     VoteCount = 52,
@@ -156,7 +156,7 @@ public sealed class PostService : IPostService
                 new MemoryPost
                 {
                     Message = "Gala Dinner 15 năm thật nhiều cảm xúc! Thật vui khi được cùng đồng đội nâng ly chúc mừng cột mốc lịch sử của công ty. IRIS 15 Years - Tự hào chặng đường vàng!",
-                    Department = "Ban Truyền Thông",
+                    Department = "Hội đồng quản trị",
                     OriginalImagePath = "/uploads/original/mock_galadinner.png",
                     ThumbnailImagePath = "/uploads/thumbnail/mock_galadinner.png",
                     VoteCount = 18,
@@ -166,7 +166,7 @@ public sealed class PostService : IPostService
                 new MemoryPost
                 {
                     Message = "Một khoảnh khắc teambuilding đáng nhớ cùng anh em. Chúc IRIS tuổi mới bùng nổ hơn nữa!",
-                    Department = "Ban Dự Án",
+                    Department = "Kỹ thuật vận hành",
                     OriginalImagePath = "/uploads/original/mock_teambuilding.png",
                     ThumbnailImagePath = "/uploads/thumbnail/mock_teambuilding.png",
                     VoteCount = 0,
@@ -176,7 +176,7 @@ public sealed class PostService : IPostService
                 new MemoryPost
                 {
                     Message = "Tầm nhìn của IRIS TECH là trở thành đơn vị cung cấp giải pháp CNTT hàng đầu Việt Nam. Tự hào được đóng góp công sức nhỏ bé của mình vào mục tiêu chung này!",
-                    Department = "Ban Chiến Lược",
+                    Department = "Văn phòng Hồ Chí Minh",
                     OriginalImagePath = "/uploads/original/mock_iris_1.png",
                     ThumbnailImagePath = "/uploads/thumbnail/mock_iris_1.png",
                     VoteCount = 25,
@@ -186,7 +186,7 @@ public sealed class PostService : IPostService
                 new MemoryPost
                 {
                     Message = "Sứ mệnh tối ưu chi phí và gia tăng doanh thu cho khách hàng bằng công nghệ AI luôn là kim chỉ nam cho mọi dòng code của phòng sản phẩm chúng tôi.",
-                    Department = "Phòng Sản Phẩm AI",
+                    Department = "Sản phẩm",
                     OriginalImagePath = "/uploads/original/mock_iris_2.png",
                     ThumbnailImagePath = "/uploads/thumbnail/mock_iris_2.png",
                     VoteCount = 30,
@@ -196,7 +196,7 @@ public sealed class PostService : IPostService
                 new MemoryPost
                 {
                     Message = "IRIS luôn đi đầu trong việc phát triển công nghệ lõi chuyên sâu về giọng nói và văn bản tiếng Việt. Giải pháp AI của chúng tôi thực sự rất ấn tượng và mang tính ứng dụng cao!",
-                    Department = "Phòng Nghiên Cứu Speech & NLP",
+                    Department = "Đối soát vận hành",
                     OriginalImagePath = "/uploads/original/mock_iris_3.png",
                     ThumbnailImagePath = "/uploads/thumbnail/mock_iris_3.png",
                     VoteCount = 42,
@@ -206,7 +206,7 @@ public sealed class PostService : IPostService
                 new MemoryPost
                 {
                     Message = "Môi trường làm việc lý tưởng tại IRIS với chế độ phúc lợi toàn diện đã giúp tôi yên tâm công tác và cống hiến hết mình suốt 5 năm qua. Tự hào là một IRISer!",
-                    Department = "Khối Hành Chính Nhân Sự",
+                    Department = "Hành chính nhân sự",
                     OriginalImagePath = "/uploads/original/mock_iris_4.png",
                     ThumbnailImagePath = "/uploads/thumbnail/mock_iris_4.png",
                     VoteCount = 15,
@@ -216,7 +216,7 @@ public sealed class PostService : IPostService
                 new MemoryPost
                 {
                     Message = "App DINO đi học 4.0 - ứng dụng giáo trí tiền tiểu học cho trẻ từ 2-6 tuổi do IRIS phát triển đã đạt cột mốc mới về lượt tải và đánh giá tích cực từ phụ huynh. Chúc mừng team Dino!",
-                    Department = "Dự án Dino Đi Học",
+                    Department = "Chăm sóc khách hàng",
                     OriginalImagePath = "/uploads/original/mock_iris_5.png",
                     ThumbnailImagePath = "/uploads/thumbnail/mock_iris_5.png",
                     VoteCount = 50,
@@ -226,7 +226,7 @@ public sealed class PostService : IPostService
                 new MemoryPost
                 {
                     Message = "Hài hòa giữa các lợi ích của Đối tác - Doanh nghiệp - Xã hội là triết lý phát triển bền vững mà ban lãnh đạo IRIS luôn theo đuổi suốt chặng đường qua.",
-                    Department = "Ban Giám Đốc",
+                    Department = "Ban Tổng giám đốc",
                     OriginalImagePath = "/uploads/original/mock_iris_6.png",
                     ThumbnailImagePath = "/uploads/thumbnail/mock_iris_6.png",
                     VoteCount = 61,
@@ -236,7 +236,7 @@ public sealed class PostService : IPostService
                 new MemoryPost
                 {
                     Message = "Làm việc chuyên nghiệp - Sản phẩm hoàn thiện - Dịch vụ chu đáo. Ba giá trị cốt lõi này đã làm nên thương hiệu IRIS TECH ngày hôm nay.",
-                    Department = "Phòng Quản Trị Chất Lượng",
+                    Department = "Kế toán",
                     OriginalImagePath = "/uploads/original/mock_iris_7.png",
                     ThumbnailImagePath = "/uploads/thumbnail/mock_iris_7.png",
                     VoteCount = 22,
@@ -246,7 +246,7 @@ public sealed class PostService : IPostService
                 new MemoryPost
                 {
                     Message = "Kỷ niệm chuyến đi Teambuilding Hè đáng nhớ vừa qua. Năng lượng của anh em IRIS luôn bùng nổ, gắn kết và sẵn sàng cho những thử thách mới!",
-                    Department = "Công Đoàn IRIS",
+                    Department = "Lái xe",
                     OriginalImagePath = "/uploads/original/mock_iris_8.png",
                     ThumbnailImagePath = "/uploads/thumbnail/mock_iris_8.png",
                     VoteCount = 37,
@@ -256,7 +256,7 @@ public sealed class PostService : IPostService
                 new MemoryPost
                 {
                     Message = "Đêm Gala Dinner kỷ niệm 15 năm thật nhiều cảm xúc lắng đọng. Cảm ơn Ban lãnh đạo đã tổ chức một chương trình vô cùng hoành tráng và ý nghĩa cho tập thể CBNV!",
-                    Department = "Phòng Truyền Thông Nội Bộ",
+                    Department = "Hành chính nhân sự",
                     OriginalImagePath = "/uploads/original/mock_iris_9.png",
                     ThumbnailImagePath = "/uploads/thumbnail/mock_iris_9.png",
                     VoteCount = 48,
@@ -266,7 +266,7 @@ public sealed class PostService : IPostService
                 new MemoryPost
                 {
                     Message = "Tự hào là đơn vị khởi nghiệp công nghệ không ngừng nỗ lực để đem lại những giải pháp AI hữu ích nhất, đồng hành cùng doanh nghiệp Việt trong kỷ nguyên số.",
-                    Department = "Khối Phát Triển Kinh Doanh",
+                    Department = "Phát triển kinh doanh",
                     OriginalImagePath = "/uploads/original/mock_iris_10.png",
                     ThumbnailImagePath = "/uploads/thumbnail/mock_iris_10.png",
                     VoteCount = 19,

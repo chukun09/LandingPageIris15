@@ -114,14 +114,35 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onSub
 
           {/* Department */}
           <div className="space-y-1.5">
-            <label className="block text-xs font-bold text-brand-textSecondary">Phòng Ban / Bộ Phận</label>
-            <input
-              type="text"
-              placeholder="Ví dụ: Phòng Công Nghệ, Khối Kinh Doanh..."
-              value={department}
-              onChange={(e) => setDepartment(e.target.value)}
-              className="input-themed w-full px-4 py-2.5 text-sm"
-            />
+            <label className="block text-xs font-bold text-brand-textSecondary">Phòng Ban / Bộ Phận *</label>
+            <div className="relative">
+              <select
+                value={department}
+                onChange={(e) => setDepartment(e.target.value)}
+                className="input-themed w-full px-4 py-2.5 text-sm cursor-pointer bg-brand-surface text-brand-textPrimary appearance-none pr-10"
+                required
+              >
+                <option value="" disabled hidden>-- Chọn phòng ban / bộ phận --</option>
+                <option value="Hội đồng quản trị">Hội đồng quản trị</option>
+                <option value="Ban Tổng giám đốc">Ban Tổng giám đốc</option>
+                <option value="Kỹ thuật vận hành">Kỹ thuật vận hành</option>
+                <option value="Phát triển phần mềm">Phát triển phần mềm</option>
+                <option value="Sản phẩm">Sản phẩm</option>
+                <option value="Phát triển kinh doanh">Phát triển kinh doanh</option>
+                <option value="P Kinh doanh">P Kinh doanh</option>
+                <option value="Văn phòng Hồ Chí Minh">Văn phòng Hồ Chí Minh</option>
+                <option value="Đối soát vận hành">Đối soát vận hành</option>
+                <option value="Chăm sóc khách hàng">Chăm sóc khách hàng</option>
+                <option value="Kế toán">Kế toán</option>
+                <option value="Hành chính nhân sự">Hành chính nhân sự</option>
+                <option value="Lái xe">Lái xe</option>
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-brand-textSecondary">
+                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                  <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                </svg>
+              </div>
+            </div>
           </div>
 
           {/* Message */}
