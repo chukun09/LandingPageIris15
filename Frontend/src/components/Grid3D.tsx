@@ -259,7 +259,7 @@ export const Grid3D = ({
         {targetInfo && (
           <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-slate-900/95 border border-amber-400/80 backdrop-blur-md px-4 py-2 rounded-xl text-xs font-bold text-amber-300 flex items-center gap-2.5 z-30 shadow-2xl animate-bounce">
             <span>🎯 Vị trí ảnh của bạn nằm trên chữ:</span>
-            <span className="text-sm font-black px-2.5 py-0.5 rounded-lg bg-amber-400 text-slate-950 font-mono shadow">
+            <span className="text-sm font-black px-2.5 py-0.5 rounded-lg bg-amber-500 text-white font-mono shadow">
               {targetInfo.char}
             </span>
             <span className="text-[11px] text-amber-200/80 hidden sm:inline">

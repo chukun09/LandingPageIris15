@@ -592,7 +592,7 @@ function App() {
                     setActivePostDetail(null);
                     mosaicRef.current?.scrollIntoView({ behavior: 'smooth' });
                   }}
-                  className="flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500 hover:text-slate-950 border border-amber-500/40 text-amber-400 font-bold px-3 py-2 rounded-full text-xs transition-colors"
+                  className="flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500 hover:text-white border border-amber-500/40 text-amber-400 font-bold px-3 py-2 rounded-full text-xs transition-colors"
                   title="Tìm vị trí trên chữ IRIS 15"
                 >
                   <MapPin className="w-3.5 h-3.5" /> Xem trên 3D

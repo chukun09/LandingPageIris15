@@ -110,19 +110,22 @@ h1, h2, h3, h4, h5, h6 {
   /* Nút chính = đèn an toàn: một khối màu phẳng, không dải chuyển màu. */
   .btn-gold {
     background-color: rgb(var(--c-secondary));
-    color: #14100A;
-    @apply font-semibold rounded-md active:scale-[0.98] transition-colors duration-150;
+    color: #ffffff !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+    @apply font-semibold rounded-md active:scale-[0.98] transition-colors duration-150 shadow-sm;
     border: none !important;
   }
   .btn-gold:hover {
     background-color: rgb(var(--c-accent));
+    color: #ffffff !important;
   }
   .dark .btn-gold {
-    color: #0B0C0E;
+    color: #ffffff !important;
   }
   .dark .btn-gold:hover {
     background-color: rgb(var(--c-secondary));
     filter: brightness(1.12);
+    color: #ffffff !important;
   }
 
   .card-premium {

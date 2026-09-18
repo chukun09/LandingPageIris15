@@ -169,7 +169,7 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
           </button>
           <button
             onClick={() => setIsPlaying((p) => !p)}
-            className="p-3 rounded-xl bg-amber-500 text-slate-950 hover:bg-amber-400 font-bold transition-colors flex items-center gap-2"
+            className="p-3 rounded-xl bg-amber-500 text-white hover:bg-amber-400 font-bold transition-colors flex items-center gap-2 shadow-sm"
           >
             {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
             <span className="text-xs font-mono hidden sm:inline">
