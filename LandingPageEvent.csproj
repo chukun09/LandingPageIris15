@@ -6,11 +6,40 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <!-- SDK gom mọi *.cs dưới thư mục gốc; loại dự án test và thư mục công cụ ra
+       để chúng không bị biên dịch vào ứng dụng web. -->
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.9" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.9" />
-    <PackageReference Include="SixLabors.ImageSharp" Version="2.1.9" />
+    <Compile Remove="Tests/**" />
+    <Content Remove="Tests/**" />
+    <None Remove="Tests/**" />
+    <Compile Remove="graphify-out/**" />
+    <Content Remove="graphify-out/**" />
+    <None Remove="graphify-out/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.10" />
+    <!-- 2.1.13: vá CVE-2025-27598 (ghi ngoài biên, vá ở 2.1.10) và CVE-2025-54575
+         (vòng lặp vô hạn, vá ở 2.1.11). Cả hai đều nằm ở bộ giải mã GIF.
+         Ở lại nhánh 2.x để giữ giấy phép Apache-2.0 và không phải đổi API. -->
+    <PackageReference Include="SixLabors.ImageSharp" Version="2.1.13" />
     <PackageReference Include="Microsoft.CognitiveServices.Speech" Version="1.47.0" />
+    <!-- Sinh mã QR cho bản in. Thuần managed, không phụ thuộc System.Drawing;
+         PngByteQRCode trả thẳng byte PNG để ImageSharp ghép vào. -->
+    <PackageReference Include="QRCoder" Version="1.8.0" />
+  </ItemGroup>
+
+  <!-- Nâng các gói phụ thuộc gián tiếp đang dính lỗ hổng. Ghim trực tiếp là cách
+       duy nhất vì gói cha vẫn tham chiếu bản cũ. -->
+  <ItemGroup>
+    <!-- CVE-2026-49451: tràn ngăn xếp khi phân tích tài liệu OpenAPI có tham
+         chiếu vòng. Vá ở 2.7.5. -->
+    <PackageReference Include="Microsoft.OpenApi" Version="2.11.0" />
+    <!-- CVE-2025-6965: lỗi của chính SQLite trước 3.50.2 (số hạng gộp có thể
+         vượt số cột → hỏng bộ nhớ). Gói này chỉ chứa thư viện native nên nâng
+         riêng nó là đủ, không đụng tới SQLitePCLRaw.core 2.1.x mà EF Core cần. -->
+    <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.12" />
   </ItemGroup>
 
 </Project>

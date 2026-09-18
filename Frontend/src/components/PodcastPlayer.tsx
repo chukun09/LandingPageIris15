@@ -19,7 +19,10 @@ interface PodcastPlayerProps {
   setIsPlaying: (playing: boolean) => void;
 }
 
-const DEFAULT_BGM_URL = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3";
+// Nhạc nền chỉ được tải khi người nghe thực sự bật nó, không phải khi vào trang.
+// Ưu tiên file tự host (đặt tại Frontend/public/audio/bgm.mp3); nếu chưa có file thì
+// khai báo VITE_BGM_URL để trỏ sang nguồn khác.
+const BGM_URL = import.meta.env.VITE_BGM_URL ?? '/audio/bgm.mp3';
 
 export const PodcastPlayer: React.FC<PodcastPlayerProps> = ({
   podcasts,
@@ -38,11 +41,20 @@ export const PodcastPlayer: React.FC<PodcastPlayerProps> = ({
   const [bgmEnabled, setBgmEnabled] = useState(true);
   const [bgmVolume, setBgmVolume] = useState(0.08);
 
+  // Thẻ <audio> nhạc nền khởi tạo rỗng; src chỉ được gán ở lần đầu thực sự phát.
+  const bgmSrcAssigned = useRef(false);
+
   useEffect(() => {
     if (!voiceAudioRef.current) return;
     if (isPlaying) {
       voiceAudioRef.current.play().catch(() => setIsPlaying(false));
       if (bgmEnabled && bgmAudioRef.current) {
+        if (!bgmSrcAssigned.current) {
+          bgmAudioRef.current.src = BGM_URL;
+          bgmAudioRef.current.loop = true;
+          bgmAudioRef.current.volume = bgmVolume;
+          bgmSrcAssigned.current = true;
+        }
         bgmAudioRef.current.play().catch(() => {});
       }
     } else {
@@ -66,7 +78,7 @@ export const PodcastPlayer: React.FC<PodcastPlayerProps> = ({
   }, [currentPodcastIndex, currentPodcast?.audioUrl]);
 
   useEffect(() => {
-    if (bgmAudioRef.current) {
+    if (bgmAudioRef.current && bgmSrcAssigned.current) {
       bgmAudioRef.current.volume = bgmVolume;
       bgmAudioRef.current.loop = true;
     }
@@ -141,22 +153,29 @@ export const PodcastPlayer: React.FC<PodcastPlayerProps> = ({
     }`}>
       <audio
         ref={voiceAudioRef}
+        preload="none"
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
         onEnded={handleAudioEnded}
       />
-      <audio ref={bgmAudioRef} src={DEFAULT_BGM_URL} />
+      <audio
+        ref={bgmAudioRef}
+        preload="none"
+        onError={() => setBgmEnabled(false)}
+      />
 
       {/* Vinyl with glow halo */}
       <div className="relative mb-6">
         {/* Pulsing halo behind vinyl when playing */}
         <AnimatePresence>
+          {/* Chỉ hoạt hoá opacity — hoạt hoá scale trên lớp blur-2xl buộc trình duyệt
+              raster lại vùng mờ mỗi khung hình. */}
           {isPlaying && (
             <motion.div
               className="absolute inset-0 rounded-full bg-brand-secondary/20 blur-2xl -z-10"
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: [1, 1.15, 1], opacity: [0.25, 0.5, 0.25] }}
-              exit={{ scale: 0.8, opacity: 0 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: [0.25, 0.5, 0.25] }}
+              exit={{ opacity: 0 }}
               transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
             />
           )}
@@ -180,9 +199,28 @@ export const PodcastPlayer: React.FC<PodcastPlayerProps> = ({
       <h3 className="text-lg font-black text-brand-textPrimary text-center mb-1 line-clamp-1">
         {currentPodcast ? currentPodcast.title : 'Radio IRIS 15'}
       </h3>
-      <p className="text-xs text-brand-textSecondary mb-6">
-        {currentPodcast ? 'AI Generated Podcast Voice' : 'Chọn một số phát thanh để nghe'}
+      <p className="text-xs text-brand-textSecondary mb-3">
+        {currentPodcast ? 'Số Phát Thanh Radio Kỷ Niệm 15 Năm' : 'Chọn một số phát thanh để nghe'}
       </p>
+
+      {/* Audio Waveform Spectrum Visualizer */}
+      <div className="flex items-end justify-center gap-1 h-7 mb-4 px-4 py-1 rounded-full bg-brand-surface/60 border border-brand-border/40">
+        {Array.from({ length: 16 }).map((_, i) => (
+          <span
+            key={i}
+            className={`w-1 rounded-full transition-all ${
+              isPlaying
+                ? 'bg-gradient-to-t from-brand-secondary to-amber-300 wave-bar'
+                : 'bg-brand-border h-1.5'
+            }`}
+            style={{
+              height: isPlaying ? `${Math.abs(Math.sin((i + 1) * 0.6)) * 18 + 6}px` : '4px',
+              animationDelay: `${(i % 5) * 0.14}s`,
+              animationDuration: `${0.75 + (i % 3) * 0.25}s`,
+            }}
+          />
+        ))}
+      </div>
 
       {/* Progress Bar */}
       <div className="w-full mb-4">

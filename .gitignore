@@ -80,3 +80,16 @@ temp_img.png
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Sinh ra khi dung file in backdrop
+wwwroot/uploads/backdrop/
+wwwroot/uploads/mosaic/
+graphify-out/
+
+
+# AI Model Checkpoints & Weights
+Services/vixtts/checkpoints/
+*.pth
+*.pt
+*.bin
+*.onnx

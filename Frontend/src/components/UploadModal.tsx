@@ -33,11 +33,12 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onSub
   }, [isOpen]);
 
   const handleFileChange = (selectedFile: File) => {
-    const allowed = ['.jpg', '.jpeg', '.png', '.webp', '.svg'];
+    // SVG đã bị loại: máy chủ không giải mã được SVG nên ảnh sẽ hỏng âm thầm.
+    const allowed = ['.jpg', '.jpeg', '.png', '.webp'];
     const extension = selectedFile.name.substring(selectedFile.name.lastIndexOf('.')).toLowerCase();
 
     if (!allowed.includes(extension)) {
-      setErrorMsg('Định dạng ảnh không hợp lệ. Chỉ chấp nhận JPG, JPEG, PNG, WEBP, SVG.');
+      setErrorMsg('Định dạng ảnh không hợp lệ. Chỉ chấp nhận JPG, JPEG, PNG, WEBP.');
       setFile(null);
       setFilePreview(null);
       return;
@@ -179,7 +180,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onSub
                 ref={fileInputRef}
                 onChange={(e) => e.target.files?.[0] && handleFileChange(e.target.files[0])}
                 className="hidden"
-                accept=".jpg,.jpeg,.png,.webp,.svg"
+                accept=".jpg,.jpeg,.png,.webp"
               />
               <motion.div animate={isDragOver ? { y: -4 } : { y: 0 }} transition={{ duration: 0.2 }}>
                 <UploadCloud className="w-10 h-10 text-brand-textMuted mx-auto mb-2" />
@@ -188,7 +189,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onSub
                 Kéo thả file ảnh hoặc click vào đây để chọn
               </p>
               <p className="text-[10px] text-brand-textMuted mt-1">
-                Hỗ trợ JPG, JPEG, PNG, WEBP, SVG (Tối đa 10MB)
+                Hỗ trợ JPG, JPEG, PNG, WEBP (Tối đa 10MB)
               </p>
             </motion.div>
           </div>

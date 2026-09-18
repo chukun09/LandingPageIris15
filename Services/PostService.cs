@@ -8,6 +8,8 @@ using Microsoft.EntityFrameworkCore;
 using LandingPageEvent.Data;
 using LandingPageEvent.DTOs;
 using LandingPageEvent.Models;
+using LandingPageEvent.Models.Mosaic;
+using LandingPageEvent.Services.Imaging;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
@@ -17,6 +19,7 @@ namespace LandingPageEvent.Services;
 public sealed class PostService : IPostService
 {
     private readonly AppDbContext _context;
+    private readonly IImagePolicy _imagePolicy;
     private readonly string _webRootPath;
 
     // Static Cache cho các bài viết đã duyệt hiển thị ở trang chủ (tối ưu hóa chịu tải)
@@ -36,9 +39,10 @@ public sealed class PostService : IPostService
         "  ███████   ███   ███   ███████   █████████    ██████    █████████    "
     };
 
-    public PostService(AppDbContext context)
+    public PostService(AppDbContext context, IImagePolicy imagePolicy)
     {
         _context = context;
+        _imagePolicy = imagePolicy;
         _context.Database.EnsureCreated();
         // Thư mục lưu trữ tĩnh trong dự án
         _webRootPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
@@ -456,15 +460,25 @@ public sealed class PostService : IPostService
             return; // File không tồn tại
         }
 
-        // 2. Tạo ảnh thumbnail nén (Crop vuông 300x300 để xếp lưới)
-        using (var image = await Image.LoadAsync(originalPath, ct))
+        // 2. Tạo ảnh thumbnail nén (Crop vuông 300x300 để xếp lưới).
+        //    Dùng cấu hình chỉ có bộ giải mã JPEG/PNG/WebP — file giả định dạng
+        //    sẽ hỏng ở đây thay vì chạm tới bộ giải mã khác.
+        try
         {
+            using var image = await Image.LoadAsync(_imagePolicy.Configuration, originalPath, ct);
             image.Mutate(x => x.Resize(new ResizeOptions
             {
                 Size = new Size(300, 300),
                 Mode = ResizeMode.Crop
             }));
             await image.SaveAsync(thumbnailPath, ct);
+        }
+        catch (Exception) when (!ct.IsCancellationRequested)
+        {
+            // Không để lại file mồ côi trong uploads/original khi ảnh không giải mã được.
+            TryDelete(originalPath);
+            TryDelete(thumbnailPath);
+            return;
         }
 
         // 3. Lưu vào Database (IsApproved = false chờ BTC duyệt)
@@ -483,89 +497,52 @@ public sealed class PostService : IPostService
         await _context.SaveChangesAsync(ct);
     }
 
-    public async Task<byte[]> GenerateBackdropAsync(CancellationToken ct)
+    private static void TryDelete(string path)
     {
-        // Lấy danh sách tất cả ảnh gốc của các bài đăng đã duyệt
-        var approvedPosts = await _context.MemoryPosts
+        try
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+        catch
+        {
+            // Dọn dẹp là nỗ lực tốt nhất, không được làm hỏng luồng xử lý.
+        }
+    }
+
+    public async Task<IReadOnlyList<MosaicPostRef>> GetMosaicPostRefsAsync(CancellationToken ct)
+    {
+        var rows = await _context.MemoryPosts
             .AsNoTracking()
             .Where(p => p.IsApproved)
+            .Select(p => new { p.Id, p.VoteCount, p.CreatedAt })
             .ToListAsync(ct);
 
-        if (!approvedPosts.Any())
-        {
-            // Trả về ảnh đen mặc định nếu chưa có bài đăng nào được duyệt
-            using var emptyImage = new Image<Rgba32>(3000, 1000);
-            emptyImage.Mutate(ctx => ctx.BackgroundColor(Color.FromRgb(15, 23, 42))); // Màu tối corporate
-            using var msEmpty = new MemoryStream();
-            await emptyImage.SaveAsPngAsync(msEmpty, ct);
-            return msEmpty.ToArray();
-        }
+        return rows.Select(p => new MosaicPostRef(p.Id, p.VoteCount, p.CreatedAt)).ToList();
+    }
 
-        // Cấu hình lưới chữ IRIS 15
-        int maskRows = IrisMask.Length;       // 7
-        int maskCols = IrisMask[0].Length;    // 60
+    public async Task<IReadOnlyDictionary<int, string>> GetThumbnailPathsAsync(CancellationToken ct)
+    {
+        var rows = await _context.MemoryPosts
+            .AsNoTracking()
+            .Where(p => p.IsApproved)
+            .Select(p => new { p.Id, p.ThumbnailImagePath })
+            .ToListAsync(ct);
 
-        // Phóng đại lưới lên 2 lần để có nhiều ô ảnh hơn (14 hàng x 120 cột)
-        int scaleFactor = 2;
-        int gridRows = maskRows * scaleFactor;
-        int gridCols = maskCols * scaleFactor;
+        return rows
+            .Where(r => !string.IsNullOrWhiteSpace(r.ThumbnailImagePath))
+            .ToDictionary(r => r.Id, r => r.ThumbnailImagePath!);
+    }
 
-        // Tính kích thước mỗi ô ảnh trên Backdrop chất lượng cao (ví dụ: 150x150 pixels)
-        int cellWidth = 150;
-        int cellHeight = 150;
+    public async Task<IReadOnlyDictionary<int, string>> GetOriginalPathsAsync(CancellationToken ct)
+    {
+        var rows = await _context.MemoryPosts
+            .AsNoTracking()
+            .Where(p => p.IsApproved)
+            .Select(p => new { p.Id, p.OriginalImagePath })
+            .ToListAsync(ct);
 
-        // Tổng kích thước Backdrop (18000 x 2100 pixels)
-        int canvasWidth = gridCols * cellWidth;
-        int canvasHeight = gridRows * cellHeight;
-
-        using var canvas = new Image<Rgba32>(canvasWidth, canvasHeight);
-        canvas.Mutate(ctx => ctx.BackgroundColor(Color.FromRgb(15, 23, 42))); // Màu nền tối (Slate 900)
-
-        int photoIndex = 0;
-
-        for (int r = 0; r < gridRows; r++)
-        {
-            for (int c = 0; c < gridCols; c++)
-            {
-                // Ánh xạ ngược lại về tọa độ của IrisMask gốc
-                int maskR = r / scaleFactor;
-                int maskC = c / scaleFactor;
-
-                if (IrisMask[maskR][maskC] == '█')
-                {
-                    // Lấy ảnh vòng lặp trong danh sách đã duyệt
-                    var post = approvedPosts[photoIndex % approvedPosts.Count];
-                    photoIndex++;
-
-                    var originalPath = Path.Combine(_webRootPath, post.OriginalImagePath.TrimStart('/'));
-                    if (File.Exists(originalPath))
-                    {
-                        try
-                        {
-                            using var tileImg = await Image.LoadAsync(originalPath, ct);
-                            // Crop và resize ảnh cho vừa với ô của backdrop
-                            tileImg.Mutate(ctx => ctx.Resize(new ResizeOptions
-                            {
-                                Size = new Size(cellWidth, cellHeight),
-                                Mode = ResizeMode.Crop
-                            }));
-
-                            // Vẽ ảnh vào đúng vị trí ô lưới trên backdrop
-                            int posX = c * cellWidth;
-                            int posY = r * cellHeight;
-                            canvas.Mutate(ctx => ctx.DrawImage(tileImg, new Point(posX, posY), 1.0f));
-                        }
-                        catch
-                        {
-                            // Bỏ qua nếu có ảnh lỗi để tránh dừng tiến trình render
-                        }
-                    }
-                }
-            }
-        }
-
-        using var ms = new MemoryStream();
-        await canvas.SaveAsPngAsync(ms, ct);
-        return ms.ToArray();
+        return rows
+            .Where(r => !string.IsNullOrWhiteSpace(r.OriginalImagePath))
+            .ToDictionary(r => r.Id, r => r.OriginalImagePath!);
     }
 }

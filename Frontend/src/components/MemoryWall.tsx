@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Search, Heart, Filter, ArrowUpDown, Calendar, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
+import { Search, Heart, Filter, ArrowUpDown, Calendar, ChevronLeft, ChevronRight, Sparkles, Download, MapPin } from 'lucide-react';
 import { staggerContainer, fadeUp, sectionViewport } from '../lib/motion';
+import { fireCelebration } from './CelebrationConfetti';
 
 interface Post {
   id: number;
@@ -17,13 +18,29 @@ interface MemoryWallProps {
   posts: Post[];
   onVote: (id: number) => void;
   onCardClick: (post: Post) => void;
+  onExportCard?: (post: Post) => void;
+  onLocatePost?: (post: Post) => void;
+  selectedDepartment?: string;
 }
 
-export const MemoryWall: React.FC<MemoryWallProps> = ({ posts, onVote, onCardClick }) => {
+export const MemoryWall: React.FC<MemoryWallProps> = ({
+  posts,
+  onVote,
+  onCardClick,
+  onExportCard,
+  onLocatePost,
+  selectedDepartment,
+}) => {
   const [search, setSearch] = useState('');
-  const [deptFilter, setDeptFilter] = useState('All');
+  const [deptFilter, setDeptFilter] = useState(selectedDepartment || 'All');
   const [sortBy, setSortBy] = useState<'votes' | 'date'>('votes');
   const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => {
+    if (selectedDepartment !== undefined) {
+      setDeptFilter(selectedDepartment);
+    }
+  }, [selectedDepartment]);
 
   const POSTS_PER_PAGE = 9;
 
@@ -147,7 +164,7 @@ export const MemoryWall: React.FC<MemoryWallProps> = ({ posts, onVote, onCardCli
                   key={post.id}
                   layout
                   variants={fadeUp}
-                  className="card-premium card-premium-hover flex flex-col justify-between overflow-hidden group cursor-pointer"
+                  className="card-premium card-polaroid flex flex-col justify-between overflow-hidden group cursor-pointer border border-brand-border hover:border-brand-secondary/50 rounded-2xl bg-brand-card shadow-sm"
                   onClick={() => onCardClick(post)}
                 >
                   {/* Photo */}
@@ -163,8 +180,22 @@ export const MemoryWall: React.FC<MemoryWallProps> = ({ posts, onVote, onCardCli
                         if (parent) parent.style.backgroundColor = 'transparent';
                       }}
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-3">
-                      <span className="text-white text-xs font-bold bg-slate-900/70 backdrop-blur-sm px-2.5 py-1 rounded-md">Xem chi tiết</span>
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-between p-3">
+                      <span className="text-white text-xs font-bold bg-slate-900/80 backdrop-blur-sm px-2.5 py-1 rounded-md">
+                        Xem chi tiết
+                      </span>
+                      {onLocatePost && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onLocatePost(post);
+                          }}
+                          className="text-amber-300 hover:text-white text-xs font-bold bg-amber-950/80 hover:bg-amber-600 border border-amber-500/40 px-2 py-1 rounded-md flex items-center gap-1 transition-colors"
+                          title="Định vị vị trí trên chữ IRIS 15"
+                        >
+                          <MapPin className="w-3 h-3" /> Tìm trên 3D
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -174,7 +205,7 @@ export const MemoryWall: React.FC<MemoryWallProps> = ({ posts, onVote, onCardCli
                       {post.message}
                     </p>
 
-                    <div className="flex items-center justify-between mt-auto pt-3">
+                    <div className="flex items-center justify-between mt-auto pt-3 border-t border-brand-border/50">
                       <div className="flex flex-col items-start gap-1">
                         <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-brand-primary/10 text-brand-primary dark:bg-brand-secondary/15 dark:text-brand-secondary truncate max-w-[120px]">
                           {post.department || 'Ẩn danh'}
@@ -184,17 +215,32 @@ export const MemoryWall: React.FC<MemoryWallProps> = ({ posts, onVote, onCardCli
                         </span>
                       </div>
 
-                      <motion.button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onVote(post.id);
-                        }}
-                        className="flex items-center gap-1.5 bg-brand-danger/5 hover:bg-brand-danger hover:text-white border border-brand-danger/25 text-brand-danger font-bold font-fira px-3 py-1.5 rounded-full text-[10px] transition-all duration-300"
-                        whileTap={{ scale: 0.8 }}
-                        title="Thả tim bình chọn"
-                      >
-                        <Heart className="w-3 h-3 fill-current" /> {post.voteCount}
-                      </motion.button>
+                      <div className="flex items-center gap-1.5">
+                        {onExportCard && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onExportCard(post);
+                            }}
+                            className="p-1.5 rounded-full text-brand-textMuted hover:text-brand-secondary hover:bg-brand-surfaceHover transition-colors"
+                            title="Tải thiệp lưu niệm cá nhân"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        <motion.button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            fireCelebration(e.clientX, e.clientY);
+                            onVote(post.id);
+                          }}
+                          className="flex items-center gap-1.5 bg-brand-danger/5 hover:bg-brand-danger hover:text-white border border-brand-danger/25 text-brand-danger font-bold font-fira px-3 py-1.5 rounded-full text-[10px] transition-all duration-300"
+                          whileTap={{ scale: 0.8 }}
+                          title="Thả tim bình chọn"
+                        >
+                          <Heart className="w-3 h-3 fill-current" /> {post.voteCount}
+                        </motion.button>
+                      </div>
                     </div>
                   </div>
                 </motion.div>

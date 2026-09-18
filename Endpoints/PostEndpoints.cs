@@ -6,8 +6,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Linq;
 using LandingPageEvent.DTOs;
 using LandingPageEvent.Services;
+using LandingPageEvent.Services.Imaging;
 
 namespace LandingPageEvent.Endpoints;
 
@@ -24,6 +26,7 @@ public static class PostEndpoints
             [FromForm] string? department,
             IFormFile file,
             IUploadQueue uploadQueue,
+            IImagePolicy imagePolicy,
             CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(message))
@@ -36,11 +39,23 @@ public static class PostEndpoints
                 return TypedResults.BadRequest("Hình ảnh kỷ niệm là bắt buộc.");
             }
 
-            var extension = Path.GetExtension(file.FileName).ToLower();
-            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".webp", ".svg" };
-            if (!System.Array.Exists(allowedExtensions, ext => ext == extension))
+            var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (!imagePolicy.AllowedExtensions.Contains(extension))
             {
-                return TypedResults.BadRequest("Định dạng ảnh không hợp lệ. Chỉ chấp nhận .jpg, .jpeg, .png, .webp, .svg");
+                return TypedResults.BadRequest(
+                    "Định dạng ảnh không hợp lệ. Chỉ chấp nhận " +
+                    string.Join(", ", imagePolicy.AllowedExtensions.Order()));
+            }
+
+            // Đuôi file chỉ là gợi ý — kiểm tra nội dung thật trước khi ghi ra đĩa,
+            // để file giả định dạng không bao giờ chạm tới bộ giải mã ảnh.
+            await using (var probe = file.OpenReadStream())
+            {
+                var check = await imagePolicy.ValidateAsync(probe, ct);
+                if (!check.Ok)
+                {
+                    return TypedResults.BadRequest(check.Error!);
+                }
             }
 
             // Lưu nhanh vào thư mục tạm
@@ -62,7 +77,7 @@ public static class PostEndpoints
         .DisableAntiforgery() // Tắt CSRF token check cho việc upload file đơn giản trên intranet
         .WithName("UploadPost")
         .WithSummary("CBNV upload hình ảnh và lời chúc ẩn danh")
-        .WithDescription("Ảnh upload sẽ được tự động lưu trữ và nén tạo thumbnail, chờ ban tổ chức duyệt.");
+        .WithDescription("Ảnh được kiểm tra định dạng thật theo nội dung file, sau đó lưu trữ và tạo thumbnail, chờ ban tổ chức duyệt.");
 
         // 2. Lấy danh sách ảnh đã duyệt hiển thị trên Bức tường ký ức
         group.MapGet("/", async Task<Ok<IReadOnlyList<PostResponse>>> (

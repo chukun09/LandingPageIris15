@@ -3,50 +3,52 @@
 @tailwind utilities;
 
 /* ─── CSS Design Tokens ────────────────────────────────────────── */
+/*
+  Hai theme là hai không gian có thật của nghề ảnh và in khổ lớn:
+  sáng = BÀN SOI PHIM (trắng lạnh khuếch tán, lưới kẻ mảnh, phim đặt trên kính),
+  tối  = PHÒNG TỐI (đen ám, nguồn sáng duy nhất là đèn an toàn hổ phách).
+*/
 :root {
-  /* 3D grid sizing */
-  --cell-size: 16px;
-  --cell-gap: 5px;
-
-  /* LIGHT PALETTE */
-  --c-bg: 248 250 252;
-  --c-bg-deep: 241 245 249;
+  /* BẢN IN TRÊN GIẤY — nền trắng ngà ấm, mực xanh navy, nhấn vàng kim.
+     Cặp vàng + xanh lấy thẳng từ logo IRIS 15. */
+  --c-bg: 250 248 244;            /* giấy ấm, không phải xám lạnh */
+  --c-bg-deep: 244 241 235;
   --c-card: 255 255 255;
-  --c-surface: 241 245 249;
-  --c-surface-hover: 226 232 240;
-  --c-primary: 21 58 130;
-  --c-secondary: 217 154 28;
-  --c-accent: 180 83 9;
-  --c-success: 5 150 105;
-  --c-danger: 220 38 38;
-  --c-text-1: 15 23 42;
-  --c-text-2: 71 85 105;
-  --c-text-3: 148 163 184;
-  --c-border: 226 232 240;
-  --c-shadow: 100 116 139;
-  --glass-bg: rgb(255 255 255 / 0.66);
-  --glass-border: rgb(226 232 240 / 0.85);
+  --c-surface: 247 245 240;
+  --c-surface-hover: 240 236 229;
+  --c-primary: 30 63 140;         /* xanh navy của logo */
+  --c-secondary: 200 141 42;      /* vàng kim, đủ tương phản trên nền sáng */
+  --c-accent: 166 112 26;
+  --c-success: 22 122 74;
+  --c-danger: 176 42 42;
+  --c-text-1: 26 37 59;           /* mực navy — mềm hơn đen tuyền nhiều */
+  --c-text-2: 92 105 128;
+  --c-text-3: 150 158 172;
+  --c-border: 231 226 217;        /* nét kẻ rất nhạt, không cắt mắt */
+  --c-shadow: 120 112 98;
+  --glass-bg: rgb(255 255 255 / 0.82);
+  --glass-border: rgb(231 226 217 / 0.95);
 }
 
 .dark {
-  /* DARK GALA PALETTE */
-  --c-bg: 10 17 40;
-  --c-bg-deep: 5 9 20;
-  --c-card: 15 26 56;
-  --c-surface: 22 35 74;
-  --c-surface-hover: 29 44 92;
-  --c-primary: 91 141 239;
-  --c-secondary: 242 193 78;
-  --c-accent: 251 191 36;
-  --c-success: 52 211 153;
-  --c-danger: 251 113 133;
-  --c-text-1: 243 246 252;
-  --c-text-2: 185 197 224;
-  --c-text-3: 116 132 168;
-  --c-border: 36 52 95;
+  /* PHÒNG TỐI — nền đen ngả navy, vàng kim rực lên như dưới đèn rọi. */
+  --c-bg: 11 13 18;
+  --c-bg-deep: 6 8 12;
+  --c-card: 20 24 32;
+  --c-surface: 27 32 42;
+  --c-surface-hover: 36 43 56;
+  --c-primary: 122 158 232;       /* xanh của logo, sáng lên cho nền tối */
+  --c-secondary: 230 180 90;      /* vàng kim */
+  --c-accent: 214 156 62;
+  --c-success: 74 190 128;
+  --c-danger: 226 106 106;
+  --c-text-1: 232 236 243;
+  --c-text-2: 156 168 187;
+  --c-text-3: 106 118 136;
+  --c-border: 36 43 56;
   --c-shadow: 0 0 0;
-  --glass-bg: rgb(15 26 56 / 0.55);
-  --glass-border: rgb(242 193 78 / 0.16);
+  --glass-bg: rgb(20 24 32 / 0.74);
+  --glass-border: rgb(230 180 90 / 0.16);
 }
 
 /* ─── Base Styles ──────────────────────────────────────────────── */
@@ -60,13 +62,23 @@
 body {
   background-color: rgb(var(--c-bg));
   color: rgb(var(--c-text-1));
-  font-family: 'Inter', sans-serif;
+  font-family: 'Be Vietnam Pro', system-ui, sans-serif;
   min-height: 100vh;
   overflow-x: hidden;
 }
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-family: 'Archivo', system-ui, sans-serif;
+  font-stretch: 112%;
+  letter-spacing: -0.015em;
+}
+
+/* Lưới canh trang rất mờ, chỉ đủ gợi mặt giấy kẻ ô của bản bông. */
+.light-table-grid {
+  background-image:
+    linear-gradient(to right, rgb(var(--c-border) / 0.9) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(var(--c-border) / 0.9) 1px, transparent 1px);
+  background-size: 72px 72px;
 }
 
 /* ─── Component Utilities ──────────────────────────────────────── */
@@ -74,76 +86,54 @@ h1, h2, h3, h4, h5, h6 {
   .glass-card {
     background: var(--glass-bg);
     border: 1px solid var(--glass-border);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    @apply rounded-3xl;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    @apply rounded-lg;
   }
 
   .glass-card-hover {
-    @apply transition-all duration-300 hover:-translate-y-1 hover:shadow-glow-gold-sm hover:border-brand-secondary/40;
+    @apply transition-all duration-200 hover:border-brand-secondary/50;
   }
 
-  .gradient-text-gold {
-    @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(
-      100deg,
-      rgb(var(--c-primary)) 0%,
-      rgb(var(--c-secondary)) 35%,
-      #fde9b8 50%,
-      rgb(var(--c-secondary)) 65%,
-      rgb(var(--c-primary)) 100%
-    );
-    background-size: 200% auto;
-  }
-
-  .gradient-text-shimmer {
-    @apply gradient-text-gold animate-shimmer;
+  /* Nhãn kỹ thuật kiểu bản bông nhà in: chữ mono, giãn, viết hoa. */
+  .spec-label {
+    @apply font-mono text-[10px] uppercase tracking-[0.18em] text-brand-textMuted;
   }
 
   .input-themed {
-    @apply bg-brand-surface border border-brand-border rounded-xl text-brand-textPrimary
+    @apply bg-brand-surface border border-brand-border rounded-md text-brand-textPrimary
            placeholder:text-brand-textMuted
-           focus:outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20
-           transition-all duration-200;
+           focus:outline-none focus:border-brand-secondary focus:ring-1 focus:ring-brand-secondary/40
+           transition-all duration-150;
   }
 
+  /* Nút chính = đèn an toàn: một khối màu phẳng, không dải chuyển màu. */
   .btn-gold {
-    background-image: linear-gradient(135deg, #fcd34d 0%, #f59e0b 50%, #d97706 100%);
-    color: #0f172a;
-    @apply font-bold rounded-xl active:scale-95 transition-all duration-200;
-    box-shadow: 0 4px 12px rgba(217, 154, 28, 0.22);
+    background-color: rgb(var(--c-secondary));
+    color: #14100A;
+    @apply font-semibold rounded-md active:scale-[0.98] transition-colors duration-150;
     border: none !important;
   }
   .btn-gold:hover {
-    box-shadow: 0 6px 18px rgba(217, 154, 28, 0.35);
-    filter: brightness(1.05);
+    background-color: rgb(var(--c-accent));
   }
-
   .dark .btn-gold {
-    background-image: linear-gradient(135deg, #f59e0b 0%, #fbbf24 50%, #f59e0b 100%);
-    color: #0b0f19;
-    box-shadow: 0 0 16px rgba(242, 193, 78, 0.28);
-    border: none !important;
+    color: #0B0C0E;
   }
   .dark .btn-gold:hover {
-    box-shadow: 0 0 24px rgba(242, 193, 78, 0.45);
+    background-color: rgb(var(--c-secondary));
+    filter: brightness(1.12);
   }
 
   .card-premium {
-    @apply bg-brand-card border border-brand-border/60 rounded-3xl transition-all duration-300;
-    box-shadow: 0 4px 20px rgba(var(--c-shadow) / 0.05);
+    @apply bg-brand-card border border-brand-border rounded-lg transition-colors duration-150;
   }
   .dark .card-premium {
-    background: linear-gradient(180deg, rgba(15, 26, 56, 0.95) 0%, rgba(10, 17, 40, 0.98) 100%);
-    border: 1px solid rgba(242, 193, 78, 0.15);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    background: rgb(var(--c-card));
+    border: 1px solid rgb(var(--c-border));
   }
   .card-premium-hover {
-    @apply hover:-translate-y-1 hover:shadow-lg transition-all duration-300;
-  }
-  .dark .card-premium-hover:hover {
-    border-color: rgba(242, 193, 78, 0.4);
-    box-shadow: 0 0 20px rgba(242, 193, 78, 0.15);
+    @apply transition-colors duration-150 hover:border-brand-secondary/50;
   }
 }
 
@@ -192,10 +182,74 @@ h1, h2, h3, h4, h5, h6 {
   background: rgb(var(--c-secondary) / 0.5);
 }
 
+/* ─── Golden Jubilee Celebratory Utilities ─────────────────────── */
+.gradient-text-gold {
+  background: linear-gradient(135deg, #FDE68A 0%, #D4AF37 50%, #B45309 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.dark .gradient-text-gold {
+  background: linear-gradient(135deg, #FFFBEB 0%, #F5D77F 40%, #E5A93C 70%, #92400E 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gold-border-shimmer {
+  position: relative;
+}
+.gold-border-shimmer::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(90deg, transparent, rgba(230, 180, 90, 0.6), transparent);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  animation: borderShimmer 4s linear infinite;
+}
+
+@keyframes borderShimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+.card-polaroid {
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease;
+}
+.card-polaroid:hover {
+  transform: translateY(-4px) scale(1.01);
+  box-shadow: 0 16px 32px -8px rgba(200, 141, 42, 0.15), 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+.dark .card-polaroid:hover {
+  box-shadow: 0 16px 36px -8px rgba(230, 180, 90, 0.2), 0 0 20px rgba(230, 180, 90, 0.1);
+}
+
+/* Audio Visualizer Spectrum Bars */
+@keyframes waveSpectrum {
+  0%, 100% { transform: scaleY(0.2); }
+  50% { transform: scaleY(1); }
+}
+
+.wave-bar {
+  transform-origin: bottom;
+  animation: waveSpectrum 1.2s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-aurora,
   .animate-shimmer,
-  .animate-vinyl-spin {
+  .animate-vinyl-spin,
+  .gold-border-shimmer::before,
+  .wave-bar {
     animation: none !important;
   }
   .animate-float-slow {

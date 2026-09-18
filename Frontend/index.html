@@ -5,7 +5,7 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="IRIS 15: Gửi Ký Ức, Chạm Thanh Âm. Trang kỷ niệm 15 năm ngày thành lập IRIS Corporation. Nơi lưu giữ những khoảnh khắc vàng, những lời chúc thân thương và những câu chuyện Radio AI đầy cảm xúc từ các thế hệ cán bộ nhân viên IRIS." />
-    <meta name="theme-color" content="#0a1128" id="theme-color-meta" />
+    <meta name="theme-color" content="#0B0C0E" id="theme-color-meta" />
 
     <!-- Anti-FOUC: decide dark/light before CSS loads -->
     <script>
@@ -22,13 +22,27 @@
       })();
     </script>
     <style>
-      html.dark { background: #0a1128; }
+      html.dark { background: #0B0C0E; }
+      html:not(.dark) { background: #EDEFF2; }
     </style>
 
-    <!-- Google Fonts: Inter (Body), Outfit (Headings), Fira Code (Stats/Dates) -->
+    <!--
+      Archivo (hiển thị, có dáng rộng kiểu áp phích in khổ lớn) +
+      Be Vietnam Pro (nội dung, thiết kế riêng cho tiếng Việt) +
+      IBM Plex Mono (số liệu: chỉ số ô, kích thước, DPI).
+      Tải không chặn render: gán media="print" rồi đổi lại khi tệp về, nên mạng
+      hội trường chậm cũng không làm trắng trang.
+    -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600;700&family=Inter:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+    <link
+      rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
+      href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,400..800&family=Be+Vietnam+Pro:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+    <noscript>
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,400..800&family=Be+Vietnam+Pro:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+    </noscript>
 
     <title>IRIS 15: Gửi Ký Ức, Chạm Thanh Âm</title>
   </head>

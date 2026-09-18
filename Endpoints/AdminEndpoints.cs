@@ -85,17 +85,13 @@ public static class AdminEndpoints
         .WithSummary("Tạo Podcast AI từ bài viết")
         .WithDescription("Gọi dịch vụ Azure Text-to-Speech API để chuyển đổi nội dung lời chúc thành file audio phát thanh.");
 
-        // 4. Xuất file ảnh in ấn Backdrop check-in độ phân giải cao
-        group.MapGet("/backdrop", async Task<FileContentHttpResult> (
-            IPostService postService,
-            CancellationToken ct) =>
-        {
-            var backdropBytes = await postService.GenerateBackdropAsync(ct);
-            return TypedResults.File(backdropBytes, "image/png", $"IRIS15_Backdrop_{System.DateTime.UtcNow:yyyyMMdd_HHmmss}.png");
-        })
-        .WithName("ExportBackdrop")
-        .WithSummary("Xuất file in Backdrop check-in sự kiện")
-        .WithDescription("Ghép các ảnh gốc đã duyệt vào chữ IRIS 15 ở độ phân giải in ấn 300 DPI và tải xuống.");
+        // 4. Endpoint xuất backdrop cũ đã chuyển sang /api/backdrop/*.
+        //    Bản cũ dựng ảnh ngay trong request và bị giao diện gọi hai lần cho
+        //    mỗi lần xem, nên dựng trọn vẹn hai lượt.
+        group.MapGet("/backdrop", () => TypedResults.Redirect("/api/backdrop/preflight", permanent: true))
+        .WithName("ExportBackdropLegacy")
+        .WithSummary("Đã chuyển sang /api/backdrop")
+        .WithDescription("Giữ lại để đường dẫn cũ không gãy; luồng mới đặt job qua POST /api/backdrop/jobs.");
 
         // 5. Xóa Podcast đã tạo
         group.MapDelete("/podcasts/{id:int}", async Task<Results<Ok<string>, NotFound>> (

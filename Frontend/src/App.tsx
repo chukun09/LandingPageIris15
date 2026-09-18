@@ -1,17 +1,25 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Sparkles, Plus, Settings, Heart, Calendar, MessageSquare, ChevronRight, Camera, X, Download, Music2 } from 'lucide-react';
-import { Grid3D } from './components/Grid3D';
+import { Sparkles, Plus, Settings, Heart, Calendar, MessageSquare, ChevronRight, X, Download, Music2, Tv, MapPin } from 'lucide-react';
+import { MosaicSkeleton } from './components/MosaicSkeleton';
+import { useLazyOnVisible } from './hooks/useLazyOnVisible';
 import { PodcastPlayer } from './components/PodcastPlayer';
 import { MemoryWall } from './components/MemoryWall';
 import { UploadModal } from './components/UploadModal';
 import { AdminPanel } from './components/AdminPanel';
 import { AdminPasswordModal } from './components/AdminPasswordModal';
-import { AuroraBackground } from './components/AuroraBackground';
+import { BackdropViewerModal } from './components/BackdropViewerModal';
+import { ProofFrame } from './components/ProofFrame';
 import { ModalShell } from './components/ModalShell';
 import { ThemeToggle } from './components/ThemeToggle';
 import { useTheme } from './context/ThemeContext';
 import { fadeUp, staggerContainer, sectionViewport } from './lib/motion';
+import { CelebrationConfetti, fireCelebration } from './components/CelebrationConfetti';
+import { GalaCountdown } from './components/GalaCountdown';
+import { JourneyTimeline } from './components/JourneyTimeline';
+import { DepartmentLeaderboard } from './components/DepartmentLeaderboard';
+import { MemoryCardExportModal } from './components/MemoryCardExportModal';
+import { GalaStageMode } from './components/GalaStageMode';
 
 interface Post {
   id: number;
@@ -37,6 +45,11 @@ interface ToastNotification {
   type: 'success' | 'error' | 'info';
 }
 
+// three + fiber + drei + postprocessing nằm trong chunk riêng, chỉ tải khi
+// người dùng sắp cuộn tới khu vực 3D (hoặc khi trang đã rảnh).
+const importGrid3D = () => import('./components/Grid3D');
+const Grid3D = lazy(() => importGrid3D().then((m) => ({ default: m.Grid3D })));
+
 function App() {
   const { theme } = useTheme();
 
@@ -51,13 +64,28 @@ function App() {
   const [activePostDetail, setActivePostDetail] = useState<Post | null>(null);
   const [voteAnimKey, setVoteAnimKey] = useState(0);
 
+  // Target Post for 3D locate
+  const [targetPostId, setTargetPostId] = useState<number | null>(null);
+  const [isStageModeOpen, setIsStageModeOpen] = useState(false);
+  const [exportPostCard, setExportPostCard] = useState<Post | null>(null);
+  const [selectedDepartment, setSelectedDepartment] = useState<string>('All');
+
   // Modal open states
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [isBackdropViewerOpen, setIsBackdropViewerOpen] = useState(false);
 
   // Notification Toast state
   const [toast, setToast] = useState<ToastNotification | null>(null);
+
+  // Hoãn mount khu vực 3D cho tới khi nó sắp lọt vào khung nhìn.
+  const { ref: mosaicRef, visible: mosaicVisible } = useLazyOnVisible<HTMLDivElement>({
+    prefetch: importGrid3D,
+  });
+
+  // Tham chiếu ổn định để Grid3D không phải render lại theo mọi thay đổi state của App.
+  const handleCellClick = useCallback((post: Post) => setActivePostDetail(post), []);
 
   const fetchData = async () => {
     try {
@@ -118,6 +146,7 @@ function App() {
           setActivePostDetail(prev => prev ? { ...prev, voteCount: prev.voteCount + 1 } : null);
           setVoteAnimKey(k => k + 1);
         }
+        fireCelebration();
         triggerToast('Cảm ơn bạn đã thả tim bình chọn!', 'success');
       } else {
         triggerToast('Lỗi khi bình chọn.', 'error');
@@ -136,6 +165,7 @@ function App() {
     try {
       const res = await fetch('/api/posts', { method: 'POST', body: formData });
       if (res.ok) {
+        fireCelebration();
         triggerToast('Tải lên thành công! Kỷ niệm đang xếp hàng chờ duyệt.', 'info');
         fetchPending();
         return true;
@@ -215,8 +245,10 @@ function App() {
 
   return (
     <div className="min-h-screen bg-brand-bg text-brand-textPrimary flex flex-col font-sans relative antialiased">
-      {/* Aurora animated background */}
-      <AuroraBackground />
+      {/* Mặt bàn soi phim: một lớp lưới kẻ tĩnh, thay cho ba khối gradient bị làm
+          mờ 110px trước đây — mỗi khối đó tốn ~28 MB bộ nhớ hợp thành ở DPR 2 và
+          là nguyên nhân chính khiến Safari trên iPhone giết ngữ cảnh WebGL. */}
+      <div className="fixed inset-0 light-table-grid opacity-60 dark:opacity-25 pointer-events-none z-0" aria-hidden />
 
       {/* Sticky Header */}
       <header className="sticky top-0 bg-brand-card/70 backdrop-blur-xl border-b border-brand-border/70 dark:border-brand-secondary/15 shadow-sm z-40">
@@ -234,8 +266,17 @@ function App() {
           <div className="flex items-center gap-2">
             <ThemeToggle />
             <motion.button
+              onClick={() => setIsStageModeOpen(true)}
+              className="flex items-center gap-1.5 bg-brand-surface hover:bg-brand-surfaceHover border border-brand-secondary/40 text-brand-secondary font-bold text-xs px-3 py-2.5 rounded-xl active:scale-95 transition-all shadow-sm"
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.94 }}
+              title="Bật chế độ trình chiếu toàn màn hình cho màn LED sân khấu"
+            >
+              <Tv className="w-4 h-4 text-amber-500" /> <span className="hidden sm:inline">Chế độ Sân khấu</span>
+            </motion.button>
+            <motion.button
               onClick={() => setIsUploadModalOpen(true)}
-              className="btn-gold flex items-center gap-1.5 text-xs px-4 py-2.5"
+              className="btn-gold flex items-center gap-1.5 text-xs px-4 py-2.5 shadow-md"
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.94 }}
             >
@@ -254,55 +295,118 @@ function App() {
       </header>
 
       {/* Main Workspace */}
-      <main className="max-w-7xl w-full mx-auto px-6 py-12 flex-1 space-y-12 z-10">
+      <main className="max-w-7xl w-full mx-auto px-6 py-10 flex-1 space-y-12 z-10">
 
-        {/* Hero Section */}
+        {/* Hero & Bức tường 3D chính */}
         <motion.section
-          className="text-center space-y-5 max-w-2xl mx-auto"
+          className="space-y-6"
           variants={staggerContainer}
           initial="hidden"
           animate="visible"
         >
-          <motion.div variants={fadeUp}>
-            <span className="inline-flex items-center gap-1.5 glass-card text-brand-secondary font-black text-[10px] px-3 py-1.5 rounded-full tracking-wide uppercase shadow-glow-gold-sm">
-              <Sparkles className="w-3 h-3" /> Chúc Mừng 15 Năm Thành Lập IRIS
-            </span>
+          <motion.div variants={fadeUp} className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-secondary/15 border border-brand-secondary/30 text-brand-secondary font-mono text-[11px] font-bold">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>2011 — 2026 · ĐẠI LỄ KỶ NIỆM 15 NĂM IRIS</span>
+              </div>
+              <h1 className="font-display text-[1.8rem] sm:text-[2.5rem] md:text-[2.9rem] leading-[1.08] font-extrabold text-brand-textPrimary">
+                15 Năm Dệt Nên Kỳ Tích — <span className="gradient-text-gold">Bức Tường Kỷ Niệm Vàng</span>
+              </h1>
+              <p className="text-xs sm:text-sm text-brand-textSecondary max-w-2xl leading-relaxed">
+                Mỗi bức ảnh là một mốc son tự hào, mỗi lời chúc là một tia sáng cùng thắp lên biểu tượng IRIS 15 năm kiên định và vươn xa.
+              </p>
+              <div className="flex flex-wrap items-center gap-2.5 pt-2 text-[11px] font-mono text-brand-textMuted">
+                <span className="px-2.5 py-1 rounded-lg bg-brand-surface border border-brand-border">
+                  ✨ 15 Năm Hành Trình
+                </span>
+                <span className="px-2.5 py-1 rounded-lg bg-brand-surface border border-brand-border font-bold text-brand-secondary">
+                  🌟 {approvedPosts.length} Mảnh Ghép Đã Duyệt
+                </span>
+                <span className="px-2.5 py-1 rounded-lg bg-brand-surface border border-brand-border">
+                  ❤️ 100% Tự Hào Đồng Hành
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
+              <motion.button
+                onClick={() => setIsUploadModalOpen(true)}
+                className="btn-gold text-xs px-4 py-2.5 flex items-center gap-1.5 shadow-md"
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <Plus className="w-4 h-4" /> Gửi ảnh của bạn
+              </motion.button>
+              <button
+                onClick={() => setIsBackdropViewerOpen(true)}
+                className="text-[11px] font-semibold text-brand-textSecondary hover:text-brand-textPrimary border border-brand-border hover:border-brand-secondary/50 px-3.5 py-2.5 rounded-md transition-colors bg-brand-card"
+              >
+                Xem bản bông in
+              </button>
+              <button
+                onClick={() => setIsStageModeOpen(true)}
+                className="text-[11px] font-semibold text-amber-500 hover:text-amber-400 border border-amber-500/40 hover:border-amber-400 px-3.5 py-2.5 rounded-md transition-colors bg-brand-card flex items-center gap-1.5"
+                title="Chiếu toàn màn hình cho màn LED sân khấu sự kiện"
+              >
+                <Tv className="w-3.5 h-3.5" /> Sân khấu Gala
+              </button>
+            </div>
           </motion.div>
-          <motion.h1
-            variants={fadeUp}
-            className="text-3xl md:text-6xl font-black tracking-tight leading-tight font-outfit pb-1 gradient-text-shimmer"
-          >
-            Gửi Ký Ức, Chạm Thanh Âm
-          </motion.h1>
-          <motion.p variants={fadeUp} className="text-sm md:text-base text-brand-textSecondary font-normal leading-relaxed">
-            Nơi lưu giữ những khoảnh khắc vàng, những lời chúc thân thương và những câu chuyện Radio AI đầy cảm xúc từ các thế hệ cán bộ nhân viên IRIS.
-          </motion.p>
-          <motion.div
-            variants={fadeUp}
-            className="h-px w-40 mx-auto bg-gradient-to-r from-transparent via-brand-secondary/70 to-transparent"
-          />
+
+          <motion.div variants={fadeUp} ref={mosaicRef}>
+            <ProofFrame
+              slug="IRIS15_BACKDROP · BẢN BÔNG"
+              spec={`${approvedPosts.length} ảnh đã duyệt · Xếp chữ IRIS 15`}
+            >
+              {mosaicVisible ? (
+                <Suspense fallback={<MosaicSkeleton />}>
+                  <Grid3D
+                    approvedPosts={approvedPosts}
+                    onCellClick={handleCellClick}
+                    theme={theme}
+                    targetPostId={targetPostId}
+                    onClearTarget={() => setTargetPostId(null)}
+                  />
+                </Suspense>
+              ) : (
+                <MosaicSkeleton />
+              )}
+            </ProofFrame>
+          </motion.div>
         </motion.section>
 
-        {/* 3D Mosaic Grid Section */}
+        {/* Gala Countdown Widget */}
         <motion.section
-          className="space-y-4"
           variants={fadeUp}
           initial="hidden"
           whileInView="visible"
           viewport={sectionViewport}
         >
-          <div className="flex items-center justify-between border-b border-brand-border pb-3">
-            <h2 className="text-lg font-black text-brand-textPrimary flex items-center gap-2">
-              <Camera className="w-5 h-5 text-brand-secondary" /> Bức Tường Logo Kỷ Niệm (3D Perspective)
-            </h2>
-            <span className="text-[10px] font-bold text-brand-primary bg-brand-primary/10 border border-brand-primary/25 px-2.5 py-1 rounded-md">
-              <span className="font-fira mr-1">{approvedPosts.length}</span> ĐÃ DUYỆT
-            </span>
-          </div>
-          <Grid3D
-            approvedPosts={approvedPosts}
-            onCellClick={(post) => setActivePostDetail(post)}
-            theme={theme}
+          <GalaCountdown />
+        </motion.section>
+
+        {/* 15-Year Journey Timeline */}
+        <motion.section
+          variants={fadeUp}
+          initial="hidden"
+          whileInView="visible"
+          viewport={sectionViewport}
+        >
+          <JourneyTimeline />
+        </motion.section>
+
+        {/* Department Constellation Leaderboard */}
+        <motion.section
+          variants={fadeUp}
+          initial="hidden"
+          whileInView="visible"
+          viewport={sectionViewport}
+        >
+          <DepartmentLeaderboard
+            posts={approvedPosts}
+            selectedDepartment={selectedDepartment}
+            onSelectDepartment={setSelectedDepartment}
           />
         </motion.section>
 
@@ -348,14 +452,14 @@ function App() {
                         setCurrentPodcastIndex(idx);
                         setIsPlaying(true);
                       }}
-                      className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all border ${
+                      className={`flex items-center justify-between gap-3 p-3 rounded-xl cursor-pointer transition-all border ${
                         currentPodcastIndex === idx
                           ? 'bg-brand-primary/15 border-brand-primary/45 text-brand-primary font-bold shadow-sm dark:shadow-glow-primary'
                           : 'bg-brand-surface/60 border-brand-border hover:bg-brand-surfaceHover hover:border-brand-border text-brand-textSecondary'
                       }`}
                     >
-                      <div className="flex items-center gap-2 max-w-[170px]">
-                        {currentPodcastIndex === idx && isPlaying && (
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        {currentPodcastIndex === idx && isPlaying ? (
                           <span className="flex items-end gap-[2px] h-4 shrink-0">
                             {[0, 1, 2].map(i => (
                               <span
@@ -365,18 +469,17 @@ function App() {
                               />
                             ))}
                           </span>
-                        )}
-                        {!(currentPodcastIndex === idx && isPlaying) && (
+                        ) : (
                           <Music2 className="w-3.5 h-3.5 shrink-0 text-brand-textMuted" />
                         )}
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-xs font-bold truncate">{pod.title}</span>
-                          <span className="text-[10px] text-brand-textMuted">
+                        <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                          <span className="text-xs font-bold truncate block" title={pod.title}>{pod.title}</span>
+                          <span className="text-[10px] text-brand-textMuted font-fira">
                             {Math.floor(pod.durationSeconds / 60)}:{String(pod.durationSeconds % 60).padStart(2, '0')}
                           </span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1 shrink-0">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -387,7 +490,7 @@ function App() {
                         >
                           <Download className="w-3.5 h-3.5" />
                         </button>
-                        <ChevronRight className="w-4 h-4 shrink-0" />
+                        <ChevronRight className="w-4 h-4 shrink-0 text-brand-textMuted" />
                       </div>
                     </motion.div>
                   ))}
@@ -407,6 +510,12 @@ function App() {
               posts={approvedPosts}
               onVote={handleVote}
               onCardClick={(post) => setActivePostDetail(post)}
+              onExportCard={(post) => setExportPostCard(post)}
+              onLocatePost={(post) => {
+                setTargetPostId(post.id);
+                mosaicRef.current?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              selectedDepartment={selectedDepartment}
             />
           </div>
         </motion.section>
@@ -457,8 +566,8 @@ function App() {
               </p>
             </div>
 
-            {/* Metadata and vote action */}
-            <div className="flex items-center justify-between pt-2 mt-2">
+            {/* Metadata and action buttons */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 mt-2 border-t border-brand-border/60">
               <div className="flex flex-col items-start gap-1">
                 <span className="inline-block text-[10px] font-bold px-2.5 py-0.5 rounded-md bg-brand-primary/10 text-brand-primary dark:bg-brand-secondary/15 dark:text-brand-secondary">
                   {activePostDetail.department || 'Ẩn danh'}
@@ -467,26 +576,49 @@ function App() {
                   <Calendar className="w-3.5 h-3.5" /> {new Date(activePostDetail.createdAt).toLocaleDateString('vi-VN')}
                 </span>
               </div>
-              <div className="relative">
-                <AnimatePresence>
-                  <motion.span
-                    key={voteAnimKey}
-                    className="absolute -top-6 left-1/2 -translate-x-1/2 text-brand-danger pointer-events-none text-base"
-                    initial={{ opacity: 1, y: 0 }}
-                    animate={{ opacity: 0, y: -28 }}
-                    exit={{}}
-                    transition={{ duration: 0.7 }}
-                  >
-                    ❤️
-                  </motion.span>
-                </AnimatePresence>
-                <motion.button
-                  onClick={() => handleVote(activePostDetail.id)}
-                  className="flex items-center gap-1.5 bg-brand-danger/5 hover:bg-brand-danger hover:text-white border border-brand-danger/25 text-brand-danger font-bold px-4 py-2 rounded-full text-xs transition-all duration-300 shadow-sm"
-                  whileTap={{ scale: 0.85 }}
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setExportPostCard(activePostDetail)}
+                  className="flex items-center gap-1.5 bg-brand-surface hover:bg-brand-surfaceHover border border-brand-secondary/40 text-brand-secondary font-bold px-3 py-2 rounded-full text-xs transition-colors"
+                  title="Tải thiệp lưu niệm cá nhân để chia sẻ"
                 >
-                  <Heart className="w-3.5 h-3.5 fill-current" /> Thích <span className="font-fira font-bold ml-0.5">{activePostDetail.voteCount}</span>
-                </motion.button>
+                  <Download className="w-3.5 h-3.5" /> Thiệp lưu niệm
+                </button>
+
+                <button
+                  onClick={() => {
+                    setTargetPostId(activePostDetail.id);
+                    setActivePostDetail(null);
+                    mosaicRef.current?.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  className="flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500 hover:text-slate-950 border border-amber-500/40 text-amber-400 font-bold px-3 py-2 rounded-full text-xs transition-colors"
+                  title="Tìm vị trí trên chữ IRIS 15"
+                >
+                  <MapPin className="w-3.5 h-3.5" /> Xem trên 3D
+                </button>
+
+                <div className="relative">
+                  <AnimatePresence>
+                    <motion.span
+                      key={voteAnimKey}
+                      className="absolute -top-6 left-1/2 -translate-x-1/2 text-brand-danger pointer-events-none text-base"
+                      initial={{ opacity: 1, y: 0 }}
+                      animate={{ opacity: 0, y: -28 }}
+                      exit={{}}
+                      transition={{ duration: 0.7 }}
+                    >
+                      ❤️
+                    </motion.span>
+                  </AnimatePresence>
+                  <motion.button
+                    onClick={() => handleVote(activePostDetail.id)}
+                    className="flex items-center gap-1.5 bg-brand-danger/5 hover:bg-brand-danger hover:text-white border border-brand-danger/25 text-brand-danger font-bold px-4 py-2 rounded-full text-xs transition-all duration-300 shadow-sm"
+                    whileTap={{ scale: 0.85 }}
+                  >
+                    <Heart className="w-3.5 h-3.5 fill-current" /> Thích <span className="font-fira font-bold ml-0.5">{activePostDetail.voteCount}</span>
+                  </motion.button>
+                </div>
               </div>
             </div>
           </div>
@@ -503,16 +635,40 @@ function App() {
         isOpen={isAdminPanelOpen}
         onClose={() => setIsAdminPanelOpen(false)}
         pendingPosts={pendingPosts}
+        approvedPosts={approvedPosts}
         podcasts={podcasts}
         onApprove={handleApprovePost}
         onGeneratePodcast={handleGeneratePodcast}
         onDeletePodcast={handleDeletePodcast}
+        onOpenBackdropViewer={() => setIsBackdropViewerOpen(true)}
+      />
+
+      <BackdropViewerModal
+        isOpen={isBackdropViewerOpen}
+        onClose={() => setIsBackdropViewerOpen(false)}
       />
 
       <AdminPasswordModal
         isOpen={isPasswordModalOpen}
         onClose={() => setIsPasswordModalOpen(false)}
         onSuccess={() => setIsAdminPanelOpen(true)}
+      />
+
+      {/* Hiệu ứng Pháo hoa Confetti toàn màn hình */}
+      <CelebrationConfetti />
+
+      {/* Modal xuất thiệp kỷ niệm cá nhân */}
+      <MemoryCardExportModal
+        isOpen={!!exportPostCard}
+        post={exportPostCard}
+        onClose={() => setExportPostCard(null)}
+      />
+
+      {/* Chế độ Sân khấu Gala Presentation Mode */}
+      <GalaStageMode
+        isOpen={isStageModeOpen}
+        posts={approvedPosts}
+        onClose={() => setIsStageModeOpen(false)}
       />
 
       {/* Toast */}

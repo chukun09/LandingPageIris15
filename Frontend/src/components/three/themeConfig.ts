@@ -1,102 +1,103 @@
+import type { MosaicLetter } from '../../types/mosaic';
+
 export type Grid3DTheme = 'dark' | 'light';
 
 export interface ThemeColors {
-  cellI: string;
-  cellR: string;
-  cellI2: string;
-  cellS: string;
-  cell1: string;
-  cell5: string;
-  sideColor: string;
+  /** Vàng kim của bốn chữ IRIS. */
+  gold: string;
+  /** Xanh dương của số 15. */
+  blue: string;
   emissiveGold: string;
   emissiveOther: string;
   emissiveIntensity: number;
-  emissiveSideIntensity: number;
 }
 
+/**
+ * Phòng tối: nền gần như đen, vàng kim rực lên như dưới đèn rọi.
+ */
 const DARK_COLORS: ThemeColors = {
-  cellI: '#4a7fe8',
-  cellR: '#a855f7',
-  cellI2: '#4a7fe8',
-  cellS: '#ec4899',
-  cell1: '#f2c14e',
-  cell5: '#f2c14e',
-  sideColor: '#6b5118',
-  emissiveGold: '#e6b13d',
-  emissiveOther: '#0a1128',
-  emissiveIntensity: 0.5,
-  emissiveSideIntensity: 0.35,
+  gold: '#E8B45C',
+  blue: '#3B6FE6',
+  emissiveGold: '#D9A03A',
+  emissiveOther: '#17325F',
+  emissiveIntensity: 0.3,
 };
 
+/**
+ * Bản in trên giấy: vàng kim và xanh dương đúng như logo đặt trên nền trắng ấm.
+ */
 const LIGHT_COLORS: ThemeColors = {
-  cellI: '#153a82',
-  cellR: '#7c3aed',
-  cellI2: '#153a82',
-  cellS: '#db2777',
-  cell1: '#d99a1c',
-  cell5: '#d99a1c',
-  sideColor: '#475569',
+  gold: '#D9A03A',
+  blue: '#2A5AC8',
   emissiveGold: '#000000',
   emissiveOther: '#000000',
   emissiveIntensity: 0,
-  emissiveSideIntensity: 0,
 };
 
 export const GRID3D_THEMES = {
   dark: {
     colors: DARK_COLORS,
-    ambientIntensity: 0.35,
-    ambientColor: '#c7d2ee',
-    directionalIntensity: 1.2,
-    directionalColor: '#fff2d5',
-    pointLight1Color: '#e6b13d',
-    pointLight1Intensity: 3.5,
-    pointLight2Color: '#3b82f6',
-    pointLight2Intensity: 1.4,
-    rimLightColor: '#f0c050',
-    rimLightIntensity: 2.0,
-    fogColor: '#0a1128',
-    fogNear: 35,
-    fogFar: 75,
-    bgColor: '#0a1128' as string | null,
-    useFloorGlow: true,
-    sparkleColor: '#f5cf6b',
-    sparkleOpacity: 0.6,
+    // Ánh sáng phải gần trung tính, nếu không đèn ngả vàng sẽ rửa trôi màu xanh
+    // của số 15 thành xám và cặp màu thương hiệu biến mất.
+    ambientIntensity: 0.8,
+    ambientColor: '#FFFFFF',
+    directionalIntensity: 1.0,
+    directionalColor: '#FFFFFF',
+    keyLightColor: '#F0CC90',
+    keyLightIntensity: 1.2,
+    fillLightColor: '#6E9BF0',
+    fillLightIntensity: 0.8,
+    rimLightColor: '#F0C878',
+    rimLightIntensity: 0.9,
+    fogColor: '#0B0C0E' as string | null,
+    // Hệ số nhân với bề rộng lưới, KHÔNG phải khoảng cách tuyệt đối: camera đặt
+    // ở z = cols nên mọi mốc sương phải co giãn theo lưới, nếu không đổi độ phân
+    // giải lưới là cả bức tường chìm sau màn sương.
+    fogNearFactor: 1.05,
+    fogFarFactor: 2.4,
+    clearColor: '#0B0C0E',
+    // Bỏ mặt sàn phát sáng: ở góc nhìn trực giao nó đọc thành một vệt kẻ ngang
+    // chứ không ra ánh hắt, và làm loãng chi tiết chữ ký của trang.
+    useFloorGlow: false,
+    sparkleColor: '#E8A33D',
+    sparkleOpacity: 0.5,
   },
   light: {
     colors: LIGHT_COLORS,
-    ambientIntensity: 0.7,
-    ambientColor: '#ffffff',
-    directionalIntensity: 1.5,
-    directionalColor: '#ffffff',
-    pointLight1Color: '#e6b13d',
-    pointLight1Intensity: 1.0,
-    pointLight2Color: '#3b82f6',
-    pointLight2Intensity: 0.8,
-    rimLightColor: '#ffffff',
+    // Ánh sáng dịu và khuếch tán: nền giấy chứ không phải mặt kính chiếu sáng.
+    ambientIntensity: 0.95,
+    ambientColor: '#FFFFFF',
+    directionalIntensity: 1.05,
+    directionalColor: '#FFF8EC',
+    keyLightColor: '#FFF0D4',
+    keyLightIntensity: 0.7,
+    fillLightColor: '#DCE4F2',
+    fillLightIntensity: 0.6,
+    rimLightColor: '#FFFFFF',
     rimLightIntensity: 0,
-    fogColor: null,
-    fogNear: 0,
-    fogFar: 0,
-    bgColor: null as string | null,
+    fogColor: null as string | null,
+    fogNearFactor: 0,
+    fogFarFactor: 0,
+    clearColor: '#FAF8F4',
     useFloorGlow: false,
-    sparkleColor: '#e6b13d',
-    sparkleOpacity: 0.0,
+    sparkleColor: '#D9A03A',
+    sparkleOpacity: 0,
   },
 };
 
-export function getCellTheme(theme: Grid3DTheme, colIndex: number): string {
+/**
+ * Màu của một ô theo chữ cái mà nó thuộc về.
+ *
+ * Trước đây màu được suy ra từ chỉ số cột với các mốc 8/22/34/48/58, trong khi
+ * dải cột thật của từng chữ lại khác — 31 trên 230 ô bị tô sai chữ. Giờ máy chủ
+ * gửi thẳng danh tính chữ cái nên không còn chỗ để lệch.
+ */
+export function getLetterColor(
+  theme: Grid3DTheme,
+  letterId: string,
+  letters: MosaicLetter[],
+): string {
   const colors = GRID3D_THEMES[theme].colors;
-  // Letter column ranges in the 70-col IRIS_MASK:
-  // I: 0-8, R: 12-22, I: 26-34, S: 38-48, space, 1: 54-58, 5: 62-70
-  if (colIndex <= 8) return colors.cellI;
-  if (colIndex <= 22) return colors.cellR;
-  if (colIndex <= 34) return colors.cellI2;
-  if (colIndex <= 48) return colors.cellS;
-  if (colIndex <= 58) return colors.cell1;
-  return colors.cell5;
-}
-
-export function isGoldCell(colIndex: number): boolean {
-  return colIndex >= 44;
+  const letter = letters.find((l) => l.id === letterId);
+  return letter?.tintRole === 'blue' ? colors.blue : colors.gold;
 }

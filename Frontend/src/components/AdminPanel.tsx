@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { X, Check, Trash2, Mic, Image, Settings, Sparkles, AlertCircle, Download } from 'lucide-react';
+import { X, Check, Trash2, Image, Settings, Sparkles, Download, Radio } from 'lucide-react';
 import { ModalShell } from './ModalShell';
+import { PodcastStudioTab } from './PodcastStudioTab';
 
 interface PendingPost {
   id: number;
@@ -26,27 +27,29 @@ interface AdminPanelProps {
   isOpen: boolean;
   onClose: () => void;
   pendingPosts: PendingPost[];
+  approvedPosts: PendingPost[];
   podcasts: Podcast[];
   onApprove: (id: number, approve: boolean) => Promise<void>;
   onGeneratePodcast: (id: number, title: string, apiKey: string, region: string) => Promise<void>;
   onDeletePodcast: (id: number) => Promise<void>;
+  onOpenBackdropViewer?: () => void;
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
   isOpen,
   onClose,
   pendingPosts,
+  approvedPosts,
   podcasts,
   onApprove,
   onGeneratePodcast,
   onDeletePodcast,
+  onOpenBackdropViewer,
 }) => {
-  const [activeTab, setActiveTab] = useState<'pending' | 'podcast_list' | 'podcast'>('pending');
+  const [activeTab, setActiveTab] = useState<'pending' | 'podcast_studio' | 'podcast_list' | 'podcast_config'>('pending');
   const [ttsApiKey, setTtsApiKey] = useState(() => localStorage.getItem('tts_api_key') || '');
   const [ttsRegion, setTtsRegion] = useState(() => localStorage.getItem('tts_region') || 'eastasia');
-  const [podcastTitles, setPodcastTitles] = useState<Record<number, string>>({});
   const [loadingPosts, setLoadingPosts] = useState<Record<number, boolean>>({});
-  const [errorMsg, setErrorMsg] = useState('');
 
   const handleDownload = async (audioUrl: string, title: string) => {
     try {
@@ -98,53 +101,40 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
-  const handlePodcastAction = async (id: number, defaultMessage: string) => {
-    const title = podcastTitles[id] || `Radio IRIS 15 - Kỷ niệm từ ${defaultMessage.substring(0, 15)}...`;
-    setLoadingPosts(prev => ({ ...prev, [id]: true }));
-    setErrorMsg('');
-    try {
-      await onGeneratePodcast(id, title, ttsApiKey, ttsRegion);
-      alert('Tạo Podcast AI thành công! Số phát thanh đã được đưa vào danh sách phát.');
-    } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Thất bại khi kết nối Azure TTS API. Vui lòng kiểm tra lại Api Key.');
-    } finally {
-      setLoadingPosts(prev => ({ ...prev, [id]: false }));
-    }
-  };
-
   const tabs = [
-    { id: 'pending' as const, label: `Bài viết chờ phê duyệt (${pendingPosts.length})` },
-    { id: 'podcast_list' as const, label: `Quản lý Podcast (${podcasts.length})` },
-    { id: 'podcast' as const, label: 'Cấu hình Podcast' },
+    { id: 'pending' as const, label: `Bài chờ duyệt (${pendingPosts.length})` },
+    { id: 'podcast_studio' as const, label: 'Podcast AI Studio 🎙️' },
+    { id: 'podcast_list' as const, label: `Danh sách Radio (${podcasts.length})` },
+    { id: 'podcast_config' as const, label: 'Cấu hình TTS' },
   ];
 
   return (
-    <ModalShell isOpen={isOpen} onClose={onClose} maxWidth="max-w-4xl">
+    <ModalShell isOpen={isOpen} onClose={onClose} maxWidth="max-w-5xl">
       <div className="flex flex-col h-[85vh]">
         {/* Header */}
         <div className="p-6 border-b border-brand-border flex items-center justify-between shrink-0">
           <div>
             <h3 className="text-lg font-black text-brand-textPrimary flex items-center gap-2">
-              <Settings className="w-5 h-5 text-brand-primary" /> Ban Tổ Chức - Kiểm Duyệt Sự Kiện
+              <Settings className="w-5 h-5 text-brand-primary" /> Ban Tổ Chức - Quản Trị Sự Kiện
             </h3>
-            <p className="text-xs text-brand-textSecondary mt-0.5">Duyệt bài đăng kỷ niệm, xuất ảnh in ấn backdrop và tạo podcast AI.</p>
+            <p className="text-xs text-brand-textSecondary mt-0.5">Duyệt kỷ niệm, tạo số Radio Podcast AI và quản lý Backdrop in ấn.</p>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-full text-brand-textMuted hover:text-brand-textPrimary hover:bg-brand-surfaceHover transition-colors"
+            className="p-1.5 rounded-full text-brand-textMuted hover:text-brand-textPrimary hover:bg-brand-surfaceHover transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="px-6 bg-brand-surface/60 border-b border-brand-border flex items-center justify-between shrink-0">
+        <div className="px-6 bg-brand-surface/60 border-b border-brand-border flex items-center justify-between shrink-0 overflow-x-auto">
           <div className="flex gap-4">
             {tabs.map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`py-3.5 px-2 font-bold text-xs border-b-2 transition-all ${
+                className={`py-3.5 px-2 font-bold text-xs border-b-2 whitespace-nowrap transition-all ${
                   activeTab === tab.id
                     ? 'border-brand-secondary text-brand-secondary'
                     : 'border-transparent text-brand-textSecondary hover:text-brand-textPrimary'
@@ -154,25 +144,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               </button>
             ))}
           </div>
-          <a
-            href="/api/admin/backdrop"
-            target="_blank"
-            download
-            className="flex items-center gap-1.5 bg-brand-primary hover:brightness-115 text-white font-bold text-xs px-3.5 py-1.5 rounded-lg transition-all"
+          <button
+            onClick={onOpenBackdropViewer}
+            className="flex items-center gap-1.5 bg-brand-primary hover:brightness-115 text-white font-bold text-xs px-3.5 py-1.5 rounded-lg transition-all shadow-sm shrink-0 ml-2"
           >
-            <Image className="w-3.5 h-3.5" /> Xuất Backdrop 300 DPI
-          </a>
+            <Image className="w-3.5 h-3.5" /> Xem Backdrop 2D Fullscreen
+          </button>
         </div>
 
         {/* Content */}
         <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
-          {errorMsg && (
-            <div className="bg-brand-danger/10 border border-brand-danger/25 p-3.5 rounded-xl flex items-start gap-2 text-brand-danger text-xs font-semibold mb-4">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{errorMsg}</span>
-            </div>
-          )}
-
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
@@ -181,10 +162,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
             >
+              {/* Tab 1: Pending Posts */}
               {activeTab === 'pending' && (
                 pendingPosts.length === 0 ? (
-                  <div className="text-center py-20 bg-brand-surface/50 rounded-2xl border border-brand-border">
-                    <Sparkles className="w-12 h-12 text-brand-textMuted mx-auto mb-3" />
+                  <div className="text-center py-20 bg-brand-surface/50 rounded-2xl border border-brand-border space-y-3">
+                    <Sparkles className="w-12 h-12 text-brand-textMuted mx-auto" />
                     <p className="text-brand-textSecondary text-sm font-semibold">Tất cả bài viết đã được phê duyệt xong!</p>
                   </div>
                 ) : (
@@ -196,7 +178,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           <th className="p-4">Lời chúc / Kỷ niệm</th>
                           <th className="p-4">Phòng ban</th>
                           <th className="p-4 text-center">Thao tác duyệt</th>
-                          <th className="p-4 text-center">Tạo Podcast AI</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -209,8 +190,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                 className="w-12 h-12 object-cover rounded-lg border border-brand-border"
                                 onError={(e) => {
                                   e.currentTarget.style.display = 'none';
-                                  const parent = e.currentTarget.parentElement;
-                                  if (parent) parent.style.backgroundColor = 'transparent';
                                 }}
                               />
                             </td>
@@ -223,36 +202,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                 <button
                                   onClick={() => handleApproveAction(post.id, true)}
                                   disabled={loadingPosts[post.id]}
-                                  className="p-1.5 bg-brand-success/10 hover:bg-brand-success hover:text-white border border-brand-success/25 text-brand-success rounded-lg transition-all"
-                                  title="Duyệt đăng"
+                                  className="p-2 bg-brand-success/10 hover:bg-brand-success hover:text-white border border-brand-success/25 text-brand-success rounded-lg transition-all flex items-center gap-1 font-bold"
+                                  title="Duyệt đăng bài"
                                 >
-                                  <Check className="w-4 h-4" />
+                                  <Check className="w-4 h-4" /> Duyệt
                                 </button>
                                 <button
                                   onClick={() => handleApproveAction(post.id, false)}
                                   disabled={loadingPosts[post.id]}
-                                  className="p-1.5 bg-brand-danger/10 hover:bg-brand-danger hover:text-white border border-brand-danger/25 text-brand-danger rounded-lg transition-all"
-                                  title="Reject & Xóa"
+                                  className="p-2 bg-brand-danger/10 hover:bg-brand-danger hover:text-white border border-brand-danger/25 text-brand-danger rounded-lg transition-all flex items-center gap-1 font-bold"
+                                  title="Từ chối & Xóa bài"
                                 >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </td>
-                            <td className="p-4 text-center">
-                              <div className="flex flex-col items-center gap-1.5">
-                                <input
-                                  type="text"
-                                  placeholder="Tiêu đề Podcast..."
-                                  value={podcastTitles[post.id] || ''}
-                                  onChange={(e) => setPodcastTitles({ ...podcastTitles, [post.id]: e.target.value })}
-                                  className="input-themed w-32 px-2 py-1 text-[10px]"
-                                />
-                                <button
-                                  onClick={() => handlePodcastAction(post.id, post.message)}
-                                  disabled={loadingPosts[post.id]}
-                                  className="px-2.5 py-1.5 bg-brand-primary/10 hover:bg-brand-primary hover:text-white border border-brand-primary/25 text-brand-primary rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all"
-                                >
-                                  <Mic className="w-3 h-3" /> Thu âm AI
+                                  <Trash2 className="w-4 h-4" /> Xóa
                                 </button>
                               </div>
                             </td>
@@ -264,11 +225,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 )
               )}
 
+              {/* Tab 2: Podcast Studio (Dedicated AI Generator) */}
+              {activeTab === 'podcast_studio' && (
+                <PodcastStudioTab
+                  pendingPosts={pendingPosts}
+                  approvedPosts={approvedPosts}
+                  onGeneratePodcast={onGeneratePodcast}
+                />
+              )}
+
+              {/* Tab 3: Podcast List */}
               {activeTab === 'podcast_list' && (
                 podcasts.length === 0 ? (
-                  <div className="text-center py-20 bg-brand-surface/50 rounded-2xl border border-brand-border">
-                    <Mic className="w-12 h-12 text-brand-textMuted mx-auto mb-3" />
-                    <p className="text-brand-textSecondary text-sm font-semibold">Chưa có số Podcast phát thanh nào được tạo.</p>
+                  <div className="text-center py-20 bg-brand-surface/50 rounded-2xl border border-brand-border space-y-3">
+                    <Radio className="w-12 h-12 text-brand-textMuted mx-auto" />
+                    <p className="text-brand-textSecondary text-sm font-semibold">Chưa có số Radio phát thanh nào được tạo.</p>
                   </div>
                 ) : (
                   <div className="overflow-x-auto border border-brand-border rounded-2xl bg-brand-card">
@@ -321,19 +292,33 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 )
               )}
 
-              {activeTab === 'podcast' && (
+              {/* Tab 4: Podcast TTS Config */}
+              {activeTab === 'podcast_config' && (
                 <div className="max-w-md space-y-6">
                   <div className="bg-brand-surface border border-brand-border p-5 rounded-2xl space-y-4">
-                    <h4 className="font-bold text-sm text-brand-textPrimary">Cấu hình Azure Speech API</h4>
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-bold text-sm text-brand-textPrimary">Cấu hình Động cơ AI TTS (ViXTTS / Azure)</h4>
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-green-500/10 text-green-400 border border-green-500/20">
+                        ViXTTS Auto-Fallback
+                      </span>
+                    </div>
                     <p className="text-[11px] text-brand-textSecondary leading-relaxed">
-                      Để tạo được giọng nói AI tự động từ lời chúc, hệ thống cần tích hợp Azure Speech Services.
-                      Nếu không nhập API Key bên dưới, hệ thống sẽ sử dụng key mặc định được cài đặt trong file{' '}
-                      <code className="bg-brand-surfaceHover border border-brand-border px-1 py-0.5 rounded text-brand-danger">appsettings.json</code>{' '}
-                      của máy chủ.
+                      Hệ thống hỗ trợ tạo giọng đọc tự động bằng <strong>ViXTTS (Mô hình AI Clone giọng nói local GPU)</strong> và tự động chuyển vùng dự phòng sang <strong>Azure Speech API</strong> nếu dịch vụ ViXTTS không khả dụng.
                     </p>
 
+                    <div className="p-3 bg-brand-surfaceHover rounded-xl border border-brand-border space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-medium text-brand-textSecondary">ViXTTS Service (GPU Local):</span>
+                        <span className="font-bold text-green-400">Ready (http://localhost:8000)</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-medium text-brand-textSecondary">Chế độ Fallback:</span>
+                        <span className="font-bold text-brand-primary">Bật (Auto-switch sang Azure)</span>
+                      </div>
+                    </div>
+
                     <div className="space-y-1.5">
-                      <label className="block text-[11px] font-bold text-brand-textSecondary">Azure Speech API Key</label>
+                      <label className="block text-[11px] font-bold text-brand-textSecondary">Azure Speech API Key (Dự phòng)</label>
                       <input
                         type="password"
                         placeholder="Nhập Azure API Key..."
@@ -347,7 +332,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       <label className="block text-[11px] font-bold text-brand-textSecondary">Azure Region</label>
                       <input
                         type="text"
-                        placeholder="Ví dụ: eastasia, southeastasia..."
+                        placeholder="Ví dụ: southeastasia..."
                         value={ttsRegion}
                         onChange={(e) => setTtsRegion(e.target.value)}
                         className="input-themed w-full px-3 py-2 text-xs"
@@ -359,7 +344,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       onClick={handleSaveConfig}
                       className="w-full py-2 bg-brand-primary hover:brightness-115 text-white font-bold rounded-xl text-xs transition-all shadow-md"
                     >
-                      Lưu cấu hình
+                      Lưu Cấu Hình Dịch Vụ
                     </button>
                   </div>
                 </div>

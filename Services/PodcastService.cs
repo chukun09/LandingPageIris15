@@ -2,32 +2,36 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net.Http;
-using System.Net.Http.Headers;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-using Microsoft.CognitiveServices.Speech;
+using Microsoft.Extensions.Logging;
 using LandingPageEvent.Data;
 using LandingPageEvent.DTOs;
 using LandingPageEvent.Models;
+using LandingPageEvent.Services.TTS;
 
 namespace LandingPageEvent.Services;
 
 public sealed class PodcastService : IPodcastService
 {
     private readonly AppDbContext _context;
-    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IEnumerable<ITtsProvider> _ttsProviders;
     private readonly IConfiguration _configuration;
+    private readonly ILogger<PodcastService> _logger;
     private readonly string _webRootPath;
 
-    public PodcastService(AppDbContext context, IHttpClientFactory httpClientFactory, IConfiguration configuration)
+    public PodcastService(
+        AppDbContext context,
+        IEnumerable<ITtsProvider> ttsProviders,
+        IConfiguration configuration,
+        ILogger<PodcastService> logger)
     {
         _context = context;
-        _httpClientFactory = httpClientFactory;
+        _ttsProviders = ttsProviders;
         _configuration = configuration;
+        _logger = logger;
         _webRootPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
     }
 
@@ -58,65 +62,61 @@ public sealed class PodcastService : IPodcastService
             throw new KeyNotFoundException($"Không tìm thấy bài viết với ID = {postId}");
         }
 
-        // Lấy cấu hình Azure Speech từ tham số truyền vào hoặc file appsettings.json
-        var speechKey = !string.IsNullOrWhiteSpace(apiKey) ? apiKey : _configuration["AzureSpeech:ApiKey"];
-        var speechRegion = !string.IsNullOrWhiteSpace(region) ? region : (_configuration["AzureSpeech:Region"] ?? "southeastasia");
-        var voiceName = _configuration["AzureSpeech:VoiceName"] ?? "vi-VN-HoaiMyNeural"; // HoaiMyNeural (nữ miền Nam), NamMinhNeural (nam miền Bắc)
+        // 2. Xác định Nhà cung cấp TTS chính và cấu hình Fallback
+        var preferredProviderName = _configuration["TtsSettings:ActiveProvider"] ?? _configuration["TtsProvider"] ?? "ViXtts";
+        var enableFallback = _configuration.GetValue<bool>("TtsSettings:EnableFallbackToAzure", true);
 
-        if (string.IsNullOrWhiteSpace(speechKey))
+        ITtsProvider? primaryProvider = _ttsProviders.FirstOrDefault(p => p.ProviderName.Equals(preferredProviderName, StringComparison.OrdinalIgnoreCase))
+                                       ?? _ttsProviders.FirstOrDefault(p => p.ProviderName.Equals("ViXtts", StringComparison.OrdinalIgnoreCase))
+                                       ?? _ttsProviders.FirstOrDefault();
+
+        if (primaryProvider == null)
         {
-            throw new InvalidOperationException("Chưa cấu hình API Key cho Azure Speech Service.");
+            throw new InvalidOperationException("Không tìm thấy bất kỳ nhà cung cấp TTS nào được đăng ký trong hệ thống.");
         }
-
-        // 2. Chuẩn bị gọi Azure Text-to-Speech bằng SDK
-        var speechConfig = SpeechConfig.FromSubscription(speechKey, speechRegion);
-        speechConfig.SpeechSynthesisVoiceName = voiceName;
-        speechConfig.SetSpeechSynthesisOutputFormat(SpeechSynthesisOutputFormat.Audio16Khz128KBitRateMonoMp3);
-
-        // Mã hóa ký tự đặc biệt trong tin nhắn để chèn vào SSML an toàn
-        var encodedText = System.Net.WebUtility.HtmlEncode(post.Message);
-
-        var ssml = $"""
-        <speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='vi-VN'>
-            <voice name='{voiceName}'>
-                <prosody rate="0.95">
-                    {encodedText}
-                </prosody>
-            </voice>
-        </speak>
-        """;
 
         byte[] audioBytes;
-        using (var synthesizer = new SpeechSynthesizer(speechConfig, audioConfig: null))
-        {
-            using var result = await synthesizer.SpeakSsmlAsync(ssml).ConfigureAwait(false);
+        string usedProviderName = primaryProvider.ProviderName;
+        string fileExtension = usedProviderName.Equals("ViXtts", StringComparison.OrdinalIgnoreCase) ? "wav" : "mp3";
 
-            if (result.Reason == ResultReason.SynthesizingAudioCompleted)
-            {
-                audioBytes = result.AudioData;
-            }
-            else if (result.Reason == ResultReason.Canceled)
-            {
-                var cancellation = SpeechSynthesisCancellationDetails.FromResult(result);
-                throw new InvalidOperationException($"Lỗi gọi Azure Speech SDK (Bị hủy): {cancellation.Reason}. Chi tiết: {cancellation.ErrorDetails}");
-            }
-            else
-            {
-                throw new InvalidOperationException($"Lỗi gọi Azure Speech SDK: {result.Reason}");
-            }
+        try
+        {
+            _logger.LogInformation("Đang sinh podcast với TTS Provider chính: {ProviderName}", primaryProvider.ProviderName);
+            audioBytes = await primaryProvider.SynthesizeSpeechAsync(post.Message, null, ct);
         }
-        var uniqueFileName = $"podcast-{postId}-{Guid.NewGuid().ToString().Substring(0, 8)}.mp3";
+        catch (Exception ex) when (enableFallback && !primaryProvider.ProviderName.Equals("Azure", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning(ex, "TTS Provider chính {PrimaryProvider} thất bại. Đang kích hoạt Auto-Fallback sang Azure Speech...", primaryProvider.ProviderName);
+
+            var fallbackProvider = _ttsProviders.FirstOrDefault(p => p.ProviderName.Equals("Azure", StringComparison.OrdinalIgnoreCase));
+            if (fallbackProvider == null)
+            {
+                throw;
+            }
+
+            audioBytes = await fallbackProvider.SynthesizeSpeechAsync(post.Message, null, ct);
+            usedProviderName = fallbackProvider.ProviderName;
+            fileExtension = "mp3";
+        }
+
+        // 3. Lưu tệp âm thanh vật lý
+        var uniqueFileName = $"podcast-{postId}-{Guid.NewGuid().ToString()[..8]}.{fileExtension}";
         var relativePath = $"/uploads/podcasts/{uniqueFileName}";
         var absolutePath = Path.Combine(_webRootPath, "uploads", "podcasts", uniqueFileName);
 
+        var uploadsDirectory = Path.GetDirectoryName(absolutePath);
+        if (!string.IsNullOrEmpty(uploadsDirectory) && !Directory.Exists(uploadsDirectory))
+        {
+            Directory.CreateDirectory(uploadsDirectory);
+        }
+
         await File.WriteAllBytesAsync(absolutePath, audioBytes, ct);
 
-        // Ước lượng độ dài âm thanh (khoảng 3 từ/giây cho tiếng Việt tốc độ trung bình)
-        // Để chuyên nghiệp hơn, ta ước tính sơ bộ từ số lượng từ:
+        // 4. Ước lượng độ dài âm thanh
         int wordCount = post.Message.Split(new[] { ' ', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).Length;
-        int estimatedDuration = Math.Max(5, (int)(wordCount / 2.5)); // Trung bình 2.5 từ/giây
+        int estimatedDuration = Math.Max(5, (int)(wordCount / 2.5));
 
-        // 4. Lưu tập Podcast vào cơ sở dữ liệu
+        // 5. Lưu tập Podcast vào cơ sở dữ liệu
         var episode = new PodcastEpisode
         {
             PostId = postId,
@@ -128,6 +128,8 @@ public sealed class PodcastService : IPodcastService
 
         _context.PodcastEpisodes.Add(episode);
         await _context.SaveChangesAsync(ct);
+
+        _logger.LogInformation("Tạo thành công podcast tập ID={EpisodeId} qua provider {UsedProvider}", episode.Id, usedProviderName);
 
         return new PodcastResponse(
             episode.Id,
@@ -146,19 +148,18 @@ public sealed class PodcastService : IPodcastService
             return false;
         }
 
-        // Xóa file vật lý nếu là file cục bộ của hệ thống
         if (!string.IsNullOrWhiteSpace(episode.AudioPath) && episode.AudioPath.StartsWith("/uploads/", StringComparison.OrdinalIgnoreCase))
         {
-            var absolutePath = Path.Combine(_webRootPath, episode.AudioPath.TrimStart('/'));
+            var absolutePath = Path.Combine(_webRootPath, episode.AudioPath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
             if (File.Exists(absolutePath))
             {
                 try
                 {
                     File.Delete(absolutePath);
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Bỏ qua lỗi xóa file để đảm bảo xóa thành công trong DB
+                    _logger.LogWarning(ex, "Không thể xóa file audio tại đường dẫn {AbsolutePath}", absolutePath);
                 }
             }
         }

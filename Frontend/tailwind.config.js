@@ -26,41 +26,31 @@ export default {
         }
       },
       boxShadow: {
-        'glow-gold':    '0 0 24px rgb(var(--c-secondary) / 0.28), 0 0 64px rgb(var(--c-secondary) / 0.10)',
-        'glow-gold-sm': '0 0 12px rgb(var(--c-secondary) / 0.22)',
-        'glow-primary': '0 0 24px rgb(var(--c-primary) / 0.30)',
-        'card':         '0 1px 3px rgb(0 0 0 / 0.06), 0 8px 24px rgb(var(--c-shadow) / 0.10)',
+        'glow-gold':    '0 0 20px rgb(var(--c-secondary) / 0.22)',
+        'glow-gold-sm': '0 0 10px rgb(var(--c-secondary) / 0.18)',
+        'glow-primary': '0 0 18px rgb(var(--c-primary) / 0.22)',
+        'card':         '0 1px 2px rgb(var(--c-shadow) / 0.08)',
       },
       fontFamily: {
-        outfit: ['Plus Jakarta Sans', 'sans-serif'],
-        inter: ['Inter', 'sans-serif'],
-        fira: ['Fira Code', 'monospace'],
+        // Archivo: dáng rộng, công nghiệp — đúng chất áp phích in khổ lớn.
+        // Be Vietnam Pro: thiết kế riêng cho tiếng Việt, dấu cân ở mọi cỡ chữ.
+        // IBM Plex Mono: số liệu thật (chỉ số ô, kích thước, DPI).
+        display: ['Archivo', 'system-ui', 'sans-serif'],
+        outfit:  ['Archivo', 'system-ui', 'sans-serif'],
+        sans:    ['Be Vietnam Pro', 'system-ui', 'sans-serif'],
+        inter:   ['Be Vietnam Pro', 'system-ui', 'sans-serif'],
+        mono:    ['IBM Plex Mono', 'ui-monospace', 'monospace'],
+        fira:    ['IBM Plex Mono', 'ui-monospace', 'monospace'],
       },
       animation: {
-        'spin-slow':   'spin 12s linear infinite',
-        'shimmer':     'shimmer 3.2s linear infinite',
-        'aurora':      'aurora 24s ease-in-out infinite alternate',
-        'float-slow':  'floatY 9s ease-in-out infinite',
-        'fadeIn':      'fadeIn 0.4s ease-out both',
-        'vinyl-spin':  'spin 12s linear infinite',
+        'spin-slow':  'spin 12s linear infinite',
+        'fadeIn':     'fadeIn 0.35s ease-out both',
+        'vinyl-spin': 'spin 12s linear infinite',
       },
       keyframes: {
-        shimmer: {
-          '0%':   { backgroundPosition: '200% center' },
-          '100%': { backgroundPosition: '-200% center' },
-        },
-        floatY: {
-          '0%,100%': { transform: 'translateY(0)' },
-          '50%':     { transform: 'translateY(-14px)' },
-        },
         fadeIn: {
           from: { opacity: '0' },
           to:   { opacity: '1' },
-        },
-        aurora: {
-          '0%':   { transform: 'translate(0,0) scale(1)' },
-          '50%':  { transform: 'translate(6vw,-4vh) scale(1.15)' },
-          '100%': { transform: 'translate(-4vw,3vh) scale(0.95)' },
         },
       },
     },
