@@ -1,15 +1,23 @@
 using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.Extensions.Primitives;
 using Microsoft.Net.Http.Headers;
 using Microsoft.EntityFrameworkCore;
 using LandingPageEvent.Data;
 using LandingPageEvent.Endpoints;
+using LandingPageEvent.HealthChecks;
 using LandingPageEvent.Middleware;
 using LandingPageEvent.Services;
 using LandingPageEvent.Services.TTS;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Đăng ký Health Checks
+builder.Services.AddHealthChecks()
+    .AddCheck<DatabaseHealthCheck>("database", tags: ["ready"])
+    .AddCheck<StorageHealthCheck>("storage", tags: ["ready"])
+    .AddCheck<ViXttsHealthCheck>("vixtts", tags: ["ready", "tts"]);
 
 // 1. Cấu hình Cơ sở dữ liệu SQLite
 var dbPath = Path.Combine(Directory.GetCurrentDirectory(), "Data", "iris15.db");
@@ -164,6 +172,26 @@ app.MapPodcastEndpoints();
 app.MapAdminEndpoints();
 app.MapMosaicEndpoints();
 app.MapBackdropEndpoints();
+
+// 10. Đăng ký các endpoints Health Checks
+// Liveness probe: Kiểm tra process ứng dụng có phản hồi không
+app.MapHealthChecks("/healthz", new HealthCheckOptions
+{
+    Predicate = _ => false
+});
+
+// Readiness probe: Kiểm tra toàn diện DB, Storage và Services
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready"),
+    ResponseWriter = HealthCheckResponseWriter.WriteResponse
+});
+
+// Endpoint /health chung trả về định dạng JSON chi tiết
+app.MapHealthChecks("/health", new HealthCheckOptions
+{
+    ResponseWriter = HealthCheckResponseWriter.WriteResponse
+});
 
 // Khởi chạy ứng dụng
 app.Run();

@@ -32,3 +32,12 @@ Content-Type: application/json
 
 ### 7. Admin: Tải ảnh in ấn Backdrop check-in độ phân giải cao
 GET {{baseUrl}}/api/admin/backdrop
+
+### 8. Health Check: Liveness probe (kiểm tra process sống)
+GET {{baseUrl}}/healthz
+
+### 9. Health Check: Readiness probe (kiểm tra toàn diện DB, Storage, TTS)
+GET {{baseUrl}}/health/ready
+
+### 10. Health Check: Báo cáo trạng thái JSON chi tiết
+GET {{baseUrl}}/health
