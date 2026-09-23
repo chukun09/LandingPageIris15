@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using LandingPageEvent.Data;
 using LandingPageEvent.DTOs;
 using LandingPageEvent.Models;
@@ -39,7 +40,7 @@ public sealed class PostService : IPostService
         "  ███████   ███   ███   ███████   █████████    ██████    █████████    "
     };
 
-    public PostService(AppDbContext context, IImagePolicy imagePolicy)
+    public PostService(AppDbContext context, IImagePolicy imagePolicy, IConfiguration? configuration = null)
     {
         _context = context;
         _imagePolicy = imagePolicy;
@@ -47,8 +48,13 @@ public sealed class PostService : IPostService
         // Thư mục lưu trữ tĩnh trong dự án
         _webRootPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
         EnsureDirectoriesExist();
-        EnsureMockImagesExist();
-        SeedMockData();
+
+        var enableSeed = configuration?.GetValue<bool>("EnableMockSeed") ?? false;
+        if (enableSeed)
+        {
+            EnsureMockImagesExist();
+            SeedMockData();
+        }
     }
 
     private void EnsureDirectoriesExist()
