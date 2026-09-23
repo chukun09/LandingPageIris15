@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using LandingPageEvent.Data;
@@ -20,37 +21,64 @@ public sealed class PodcastService : IPodcastService
     private readonly IEnumerable<ITtsProvider> _ttsProviders;
     private readonly IConfiguration _configuration;
     private readonly ILogger<PodcastService> _logger;
+    private readonly IMemoryCache _cache;
     private readonly string _webRootPath;
+
+    private const string PodcastsCacheKey = "PodcastService_Podcasts";
+    private static readonly SemaphoreSlim _podcastLock = new(1, 1);
 
     public PodcastService(
         AppDbContext context,
         IEnumerable<ITtsProvider> ttsProviders,
         IConfiguration configuration,
-        ILogger<PodcastService> logger)
+        ILogger<PodcastService> logger,
+        IMemoryCache? cache = null)
     {
         _context = context;
         _ttsProviders = ttsProviders;
         _configuration = configuration;
         _logger = logger;
+        _cache = cache ?? new MemoryCache(new MemoryCacheOptions());
         _webRootPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
     }
 
     public async Task<IReadOnlyList<PodcastResponse>> GetPodcastsAsync(CancellationToken ct)
     {
-        var episodes = await _context.PodcastEpisodes
-            .AsNoTracking()
-            .ToListAsync(ct);
+        if (_cache.TryGetValue(PodcastsCacheKey, out IReadOnlyList<PodcastResponse>? cached) && cached != null)
+        {
+            return cached;
+        }
 
-        return episodes
-            .OrderByDescending(p => p.CreatedAt)
-            .Select(p => new PodcastResponse(
-                p.Id,
-                p.PostId,
-                p.Title,
-                p.AudioPath,
-                p.DurationSeconds,
-                p.CreatedAt))
-            .ToList();
+        await _podcastLock.WaitAsync(ct);
+        try
+        {
+            if (_cache.TryGetValue(PodcastsCacheKey, out cached) && cached != null)
+            {
+                return cached;
+            }
+
+            var episodes = await _context.PodcastEpisodes
+                .AsNoTracking()
+                .ToListAsync(ct);
+
+            cached = episodes
+                .OrderByDescending(p => p.CreatedAt)
+                .Select(p => new PodcastResponse(
+                    p.Id,
+                    p.PostId,
+                    p.Title,
+                    p.AudioPath,
+                    p.DurationSeconds,
+                    p.CreatedAt))
+                .ToList();
+
+            _cache.Set(PodcastsCacheKey, cached, TimeSpan.FromMinutes(30));
+            return cached;
+        }
+        finally
+        {
+            _podcastLock.Release();
+        }
     }
 
     public async Task<PodcastResponse> GeneratePodcastAsync(int postId, string title, string? apiKey, string? region, CancellationToken ct)
@@ -128,6 +156,7 @@ public sealed class PodcastService : IPodcastService
 
         _context.PodcastEpisodes.Add(episode);
         await _context.SaveChangesAsync(ct);
+        _cache.Remove(PodcastsCacheKey);
 
         _logger.LogInformation("Tạo thành công podcast tập ID={EpisodeId} qua provider {UsedProvider}", episode.Id, usedProviderName);
 
@@ -166,6 +195,7 @@ public sealed class PodcastService : IPodcastService
 
         _context.PodcastEpisodes.Remove(episode);
         await _context.SaveChangesAsync(ct);
+        _cache.Remove(PodcastsCacheKey);
         return true;
     }
 
@@ -241,6 +271,7 @@ public sealed class PodcastService : IPodcastService
 
         _context.PodcastEpisodes.Add(episode);
         await _context.SaveChangesAsync(ct);
+        _cache.Remove(PodcastsCacheKey);
 
         _logger.LogInformation("Tải lên thành công podcast tập ID={EpisodeId} ({Title}) đường dẫn: {AudioPath}", episode.Id, episode.Title, episode.AudioPath);
 

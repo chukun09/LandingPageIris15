@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Caching.Memory;
 using LandingPageEvent.Data;
 using LandingPageEvent.DTOs;
 using LandingPageEvent.Models;
@@ -21,10 +22,13 @@ public sealed class PostService : IPostService
 {
     private readonly AppDbContext _context;
     private readonly IImagePolicy _imagePolicy;
+    private readonly IMemoryCache _cache;
     private readonly string _webRootPath;
 
-    // Static Cache cho các bài viết đã duyệt hiển thị ở trang chủ (tối ưu hóa chịu tải)
-    private static List<PostResponse>? _cachedApprovedPosts = null;
+    // Cache Keys & Synchronization cho chịu tải cao
+    private const string ApprovedPostsKey = "PostService_ApprovedPosts";
+    private const string ThumbnailPathsKey = "PostService_ThumbnailPaths";
+    private const string OriginalPathsKey = "PostService_OriginalPaths";
     private static readonly SemaphoreSlim _cacheLock = new(1, 1);
 
     // Mặt nạ chữ "IRIS 15" trong lưới 8 hàng x 70 cột (Đã cân đối và vuông vắn)
@@ -40,10 +44,15 @@ public sealed class PostService : IPostService
         "  ███████   ███   ███   ███████   █████████    ██████    █████████    "
     };
 
-    public PostService(AppDbContext context, IImagePolicy imagePolicy, IConfiguration? configuration = null)
+    public PostService(
+        AppDbContext context,
+        IImagePolicy imagePolicy,
+        IMemoryCache? cache = null,
+        IConfiguration? configuration = null)
     {
         _context = context;
         _imagePolicy = imagePolicy;
+        _cache = cache ?? new MemoryCache(new MemoryCacheOptions());
         // Thư mục lưu trữ tĩnh trong dự án
         _webRootPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
         EnsureDirectoriesExist();
@@ -362,17 +371,17 @@ public sealed class PostService : IPostService
 
     public async Task<IReadOnlyList<PostResponse>> GetApprovedPostsAsync(CancellationToken ct)
     {
-        if (_cachedApprovedPosts != null)
+        if (_cache.TryGetValue(ApprovedPostsKey, out List<PostResponse>? cached) && cached != null)
         {
-            return _cachedApprovedPosts;
+            return cached;
         }
 
         await _cacheLock.WaitAsync(ct);
         try
         {
-            if (_cachedApprovedPosts != null)
+            if (_cache.TryGetValue(ApprovedPostsKey, out cached) && cached != null)
             {
-                return _cachedApprovedPosts;
+                return cached;
             }
 
             var posts = await _context.MemoryPosts
@@ -380,7 +389,7 @@ public sealed class PostService : IPostService
                 .Where(p => p.IsApproved)
                 .ToListAsync(ct);
 
-            _cachedApprovedPosts = posts
+            cached = posts
                 .OrderByDescending(p => p.VoteCount)
                 .ThenByDescending(p => p.CreatedAt)
                 .Select(p => new PostResponse(
@@ -392,7 +401,8 @@ public sealed class PostService : IPostService
                     p.CreatedAt))
                 .ToList();
 
-            return _cachedApprovedPosts;
+            _cache.Set(ApprovedPostsKey, cached, TimeSpan.FromSeconds(10));
+            return cached;
         }
         finally
         {
@@ -432,8 +442,15 @@ public sealed class PostService : IPostService
         }
 
         await _context.SaveChangesAsync(ct);
-        _cachedApprovedPosts = null; // Xóa cache để cập nhật dữ liệu mới hiển thị
+        InvalidateApprovedCaches();
         return true;
+    }
+
+    private void InvalidateApprovedCaches()
+    {
+        _cache.Remove(ApprovedPostsKey);
+        _cache.Remove(ThumbnailPathsKey);
+        _cache.Remove(OriginalPathsKey);
     }
 
     public async Task<bool> VotePostAsync(int id, CancellationToken ct)
@@ -443,7 +460,18 @@ public sealed class PostService : IPostService
 
         post.VoteCount++;
         await _context.SaveChangesAsync(ct);
-        _cachedApprovedPosts = null; // Xóa cache khi số lượt tim thay đổi để cập nhật bảng xếp hạng
+
+        // Cập nhật mượt mà trực tiếp trong Cache: KHÔNG xóa cache để tránh hiện tượng Cache Stampede khi nhiều người vote
+        if (_cache.TryGetValue(ApprovedPostsKey, out List<PostResponse>? currentList) && currentList != null)
+        {
+            var updated = currentList
+                .Select(p => p.Id == id ? p with { VoteCount = post.VoteCount } : p)
+                .OrderByDescending(p => p.VoteCount)
+                .ThenByDescending(p => p.CreatedAt)
+                .ToList();
+            _cache.Set(ApprovedPostsKey, updated, TimeSpan.FromSeconds(10));
+        }
+
         return true;
     }
 
@@ -516,38 +544,45 @@ public sealed class PostService : IPostService
 
     public async Task<IReadOnlyList<MosaicPostRef>> GetMosaicPostRefsAsync(CancellationToken ct)
     {
-        var rows = await _context.MemoryPosts
-            .AsNoTracking()
-            .Where(p => p.IsApproved)
-            .Select(p => new { p.Id, p.VoteCount, p.CreatedAt })
-            .ToListAsync(ct);
-
-        return rows.Select(p => new MosaicPostRef(p.Id, p.VoteCount, p.CreatedAt)).ToList();
+        // Tận dụng dữ liệu đã cache ở RAM từ GetApprovedPostsAsync — 0 DB query thêm
+        var approved = await GetApprovedPostsAsync(ct);
+        return approved.Select(p => new MosaicPostRef(p.Id, p.VoteCount, p.CreatedAt)).ToList();
     }
 
     public async Task<IReadOnlyDictionary<int, string>> GetThumbnailPathsAsync(CancellationToken ct)
     {
-        var rows = await _context.MemoryPosts
-            .AsNoTracking()
-            .Where(p => p.IsApproved)
-            .Select(p => new { p.Id, p.ThumbnailImagePath })
-            .ToListAsync(ct);
+        if (_cache.TryGetValue(ThumbnailPathsKey, out IReadOnlyDictionary<int, string>? cached) && cached != null)
+        {
+            return cached;
+        }
 
-        return rows
-            .Where(r => !string.IsNullOrWhiteSpace(r.ThumbnailImagePath))
-            .ToDictionary(r => r.Id, r => r.ThumbnailImagePath!);
+        var approved = await GetApprovedPostsAsync(ct);
+        var dict = approved
+            .Where(r => !string.IsNullOrWhiteSpace(r.ThumbnailUrl))
+            .ToDictionary(r => r.Id, r => r.ThumbnailUrl);
+
+        _cache.Set(ThumbnailPathsKey, dict, TimeSpan.FromMinutes(5));
+        return dict;
     }
 
     public async Task<IReadOnlyDictionary<int, string>> GetOriginalPathsAsync(CancellationToken ct)
     {
+        if (_cache.TryGetValue(OriginalPathsKey, out IReadOnlyDictionary<int, string>? cached) && cached != null)
+        {
+            return cached;
+        }
+
         var rows = await _context.MemoryPosts
             .AsNoTracking()
             .Where(p => p.IsApproved)
             .Select(p => new { p.Id, p.OriginalImagePath })
             .ToListAsync(ct);
 
-        return rows
+        var dict = rows
             .Where(r => !string.IsNullOrWhiteSpace(r.OriginalImagePath))
             .ToDictionary(r => r.Id, r => r.OriginalImagePath!);
+
+        _cache.Set(OriginalPathsKey, dict, TimeSpan.FromMinutes(10));
+        return dict;
     }
 }

@@ -57,7 +57,8 @@ else
         options.UseSqlite($"Data Source={dbPath}"));
 }
 
-// 2. Đăng ký HttpClient và các Service nghiệp vụ
+// 2. Đăng ký Caching, HttpClient và các Service nghiệp vụ
+builder.Services.AddMemoryCache();
 builder.Services.AddHttpClient("ViXttsClient", client =>
 {
     client.Timeout = TimeSpan.FromSeconds(60); // Timeout cho ViXTTS GPU Synthesis
