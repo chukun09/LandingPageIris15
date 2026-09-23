@@ -44,7 +44,6 @@ public sealed class PostService : IPostService
     {
         _context = context;
         _imagePolicy = imagePolicy;
-        _context.Database.EnsureCreated();
         // Thư mục lưu trữ tĩnh trong dự án
         _webRootPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
         EnsureDirectoriesExist();

@@ -20,6 +20,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.10" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <!-- 2.1.13: vá CVE-2025-27598 (ghi ngoài biên, vá ở 2.1.10) và CVE-2025-54575
          (vòng lặp vô hạn, vá ở 2.1.11). Cả hai đều nằm ở bộ giải mã GIF.
          Ở lại nhánh 2.x để giữ giấy phép Apache-2.0 và không phải đổi API. -->
