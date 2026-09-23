@@ -31,6 +31,7 @@ interface AdminPanelProps {
   podcasts: Podcast[];
   onApprove: (id: number, approve: boolean) => Promise<void>;
   onGeneratePodcast: (id: number, title: string, apiKey: string, region: string) => Promise<void>;
+  onUploadPodcast: (formData: FormData) => Promise<void>;
   onDeletePodcast: (id: number) => Promise<void>;
   onOpenBackdropViewer?: () => void;
 }
@@ -43,10 +44,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   podcasts,
   onApprove,
   onGeneratePodcast,
+  onUploadPodcast,
   onDeletePodcast,
   onOpenBackdropViewer,
 }) => {
-  const [activeTab, setActiveTab] = useState<'pending' | 'podcast_studio' | 'podcast_list' | 'podcast_config'>('pending');
+  const [activeTab, setActiveTab] = useState<'pending' | 'podcast_studio' | 'podcast_list' | 'podcast_config' | 'backdrop'>('pending');
   const [ttsApiKey, setTtsApiKey] = useState(() => localStorage.getItem('tts_api_key') || '');
   const [ttsRegion, setTtsRegion] = useState(() => localStorage.getItem('tts_region') || 'eastasia');
   const [loadingPosts, setLoadingPosts] = useState<Record<number, boolean>>({});
@@ -106,6 +108,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     { id: 'podcast_studio' as const, label: 'Podcast AI Studio 🎙️' },
     { id: 'podcast_list' as const, label: `Danh sách Radio (${podcasts.length})` },
     { id: 'podcast_config' as const, label: 'Cấu hình TTS' },
+    { id: 'backdrop' as const, label: 'Bản Bông In Ấn (Backdrop) 🖨️' },
   ];
 
   return (
@@ -225,12 +228,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 )
               )}
 
-              {/* Tab 2: Podcast Studio (Dedicated AI Generator) */}
+              {/* Tab 2: Podcast Studio (Dedicated AI Generator & Manual Upload) */}
               {activeTab === 'podcast_studio' && (
                 <PodcastStudioTab
                   pendingPosts={pendingPosts}
                   approvedPosts={approvedPosts}
                   onGeneratePodcast={onGeneratePodcast}
+                  onUploadPodcast={onUploadPodcast}
                 />
               )}
 
@@ -346,6 +350,71 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     >
                       Lưu Cấu Hình Dịch Vụ
                     </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 5: Backdrop Printing Control */}
+              {activeTab === 'backdrop' && (
+                <div className="max-w-2xl space-y-6">
+                  <div className="bg-brand-surface border border-brand-border p-6 rounded-2xl space-y-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <h4 className="font-bold text-sm text-brand-textPrimary flex items-center gap-2">
+                          <Image className="w-5 h-5 text-brand-secondary" />
+                          Xuất File In Bông Backdrop Khổ Lớn (6m × 3m)
+                        </h4>
+                        <p className="text-xs text-brand-textSecondary mt-1 leading-relaxed">
+                          Tính năng xuất file đồ họa in ấn độ phân giải cao phục vụ thi công backdrop sân khấu Gala và phông chụp ảnh sự kiện IRIS 15.
+                        </p>
+                      </div>
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">
+                        Admin Only
+                      </span>
+                    </div>
+
+                    {/* Specifications Card */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="p-3 bg-brand-surfaceHover rounded-xl border border-brand-border text-center">
+                        <span className="block text-[10px] font-mono text-brand-textMuted uppercase">Khổ in thực</span>
+                        <strong className="text-xs font-bold text-brand-textPrimary">6000 × 3000 mm</strong>
+                      </div>
+                      <div className="p-3 bg-brand-surfaceHover rounded-xl border border-brand-border text-center">
+                        <span className="block text-[10px] font-mono text-brand-textMuted uppercase">Độ phân giải</span>
+                        <strong className="text-xs font-bold text-brand-secondary">45 DPI (Tối ưu)</strong>
+                      </div>
+                      <div className="p-3 bg-brand-surfaceHover rounded-xl border border-brand-border text-center">
+                        <span className="block text-[10px] font-mono text-brand-textMuted uppercase">Kích thước Canvas</span>
+                        <strong className="text-xs font-bold text-brand-textPrimary">~10,630 × 5,315 px</strong>
+                      </div>
+                      <div className="p-3 bg-brand-surfaceHover rounded-xl border border-brand-border text-center">
+                        <span className="block text-[10px] font-mono text-brand-textMuted uppercase">Ảnh đã duyệt</span>
+                        <strong className="text-xs font-bold text-emerald-400">{approvedPosts.length} ảnh</strong>
+                      </div>
+                    </div>
+
+                    {/* Operational Guardrails */}
+                    <div className="p-4 bg-brand-card rounded-xl border border-brand-border space-y-2 text-xs text-brand-textSecondary leading-relaxed">
+                      <p className="font-semibold text-brand-textPrimary flex items-center gap-1.5">
+                        🛡️ Cơ chế an toàn & Tiết kiệm tài nguyên:
+                      </p>
+                      <ul className="list-disc list-inside space-y-1 text-[11px] text-brand-textMuted pl-1">
+                        <li><strong>Kiểm tra bản xuất cũ:</strong> Nếu máy chủ đã có sẵn file in được render trước đó, hệ thống sẽ tự động thông báo để bạn chọn dùng lại ngay mà không phải chờ dựng lại.</li>
+                        <li><strong>Dựng lại theo yêu cầu:</strong> Bạn có thể chủ động chọn &quot;Dựng lại bản mới&quot; khi có nhiều ảnh kỷ niệm mới vừa được duyệt.</li>
+                        <li><strong>Chống sập bộ nhớ:</strong> Quá trình render chạy ngầm đa luồng trong bộ nhớ đệm, có trần bảo vệ 80 MPx.</li>
+                      </ul>
+                    </div>
+
+                    {/* Action trigger */}
+                    <div className="pt-2">
+                      <button
+                        type="button"
+                        onClick={onOpenBackdropViewer}
+                        className="btn-gold w-full py-3 text-xs font-bold flex items-center justify-center gap-2 shadow-md transition-all active:scale-[0.99]"
+                      >
+                        <Image className="w-4 h-4" /> Mở Trình Quản Lý & Xuất File In Bông
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}

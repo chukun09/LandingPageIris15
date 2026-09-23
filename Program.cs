@@ -17,7 +17,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddHealthChecks()
     .AddCheck<DatabaseHealthCheck>("database", tags: ["ready"])
     .AddCheck<StorageHealthCheck>("storage", tags: ["ready"])
-    .AddCheck<ViXttsHealthCheck>("vixtts", tags: ["ready", "tts"]);
+    .AddCheck<ViXttsHealthCheck>("vixtts", tags: ["tts"]);
 
 // 1. Cấu hình Cơ sở dữ liệu SQLite
 var dbPath = Path.Combine(Directory.GetCurrentDirectory(), "Data", "iris15.db");

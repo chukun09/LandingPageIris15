@@ -41,3 +41,18 @@ GET {{baseUrl}}/health/ready
 
 ### 10. Health Check: Báo cáo trạng thái JSON chi tiết
 GET {{baseUrl}}/health
+
+### 11. Admin: Tải lên file Podcast âm thanh thủ công (.mp3, .wav, .m4a)
+POST {{baseUrl}}/api/admin/podcasts/upload
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="title"
+
+Radio IRIS 15 - Kỷ niệm Vàng (Tải lên thủ công)
+--WebAppBoundary
+Content-Disposition: form-data; name="file"; filename="sample_radio.mp3"
+Content-Type: audio/mpeg
+
+< ./wwwroot/favicon.ico
+--WebAppBoundary--

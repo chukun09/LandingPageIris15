@@ -6,6 +6,15 @@ public sealed record BackdropWarningDto(int PostId, int SourceShortEdgePx, int R
 
 /// <param name="EstimatedPeakMb">Bộ nhớ đỉnh ước tính khi dựng, tính bằng MB.</param>
 /// <param name="ExceedsMemoryCap">Vượt trần megapixel cấu hình cho máy chủ này.</param>
+public sealed record ExistingBackdropFileDto(
+    string FileName,
+    long FileBytes,
+    System.DateTimeOffset CreatedAt,
+    string PreviewUrl,
+    string DownloadUrl,
+    bool IsCurrentLayout,
+    int? PhotoCountInFile);
+
 public sealed record BackdropPreflightResponse(
     int PhotoCount,
     int MinPhotos,
@@ -21,7 +30,8 @@ public sealed record BackdropPreflightResponse(
     int LargestTileEdgePx,
     string Format,
     string Theme,
-    IReadOnlyList<BackdropWarningDto> LowResolutionPhotos);
+    IReadOnlyList<BackdropWarningDto> LowResolutionPhotos,
+    ExistingBackdropFileDto? ExistingFile = null);
 
 public sealed record BackdropJobResponse(
     Guid JobId,

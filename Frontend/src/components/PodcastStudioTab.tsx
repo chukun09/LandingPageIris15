@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Mic, Sparkles, Search, CheckCircle2, Clock, Volume2, AlertCircle } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Mic, Sparkles, Search, CheckCircle2, Clock, Volume2, AlertCircle, Upload, Music, FileAudio, Play } from 'lucide-react';
 
 interface MemoryPostItem {
   id: number;
@@ -15,13 +15,16 @@ interface PodcastStudioTabProps {
   pendingPosts: MemoryPostItem[];
   approvedPosts: MemoryPostItem[];
   onGeneratePodcast: (id: number, title: string, apiKey: string, region: string) => Promise<void>;
+  onUploadPodcast: (formData: FormData) => Promise<void>;
 }
 
 export const PodcastStudioTab: React.FC<PodcastStudioTabProps> = ({
   pendingPosts,
   approvedPosts,
   onGeneratePodcast,
+  onUploadPodcast,
 }) => {
+  const [studioMode, setStudioMode] = useState<'tts' | 'upload'>('tts');
   const [listType, setListType] = useState<'pending' | 'approved'>('approved');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPost, setSelectedPost] = useState<MemoryPostItem | null>(null);
@@ -30,6 +33,11 @@ export const PodcastStudioTab: React.FC<PodcastStudioTabProps> = ({
   const [ttsRegion, setTtsRegion] = useState(() => localStorage.getItem('tts_region') || 'eastasia');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // State cho chế độ upload file audio
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const activeList = listType === 'pending' ? pendingPosts : approvedPosts;
   const filteredPosts = activeList.filter(p =>
@@ -44,6 +52,23 @@ export const PodcastStudioTab: React.FC<PodcastStudioTabProps> = ({
     const dateStr = new Date(post.createdAt).toLocaleDateString('vi-VN');
     setPodcastTitle(`Radio IRIS 15 ${shortDept} - Kỷ niệm ${dateStr}`);
     setStatusMessage(null);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setUploadFile(file);
+      if (audioPreviewUrl) {
+        URL.revokeObjectURL(audioPreviewUrl);
+      }
+      const preview = URL.createObjectURL(file);
+      setAudioPreviewUrl(preview);
+      if (!podcastTitle.trim()) {
+        const cleanName = file.name.replace(/\.[^/.]+$/, '');
+        setPodcastTitle(`Radio IRIS 15 - ${cleanName}`);
+      }
+      setStatusMessage(null);
+    }
   };
 
   const handleGenerate = async (e: React.FormEvent) => {
@@ -68,6 +93,52 @@ export const PodcastStudioTab: React.FC<PodcastStudioTabProps> = ({
       setStatusMessage({
         type: 'error',
         text: err instanceof Error ? err.message : 'Tạo Podcast AI thất bại. Vui lòng kiểm tra lại dịch vụ TTS.',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleUploadSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!podcastTitle.trim()) {
+      setStatusMessage({ type: 'error', text: 'Vui lòng nhập tiêu đề số phát thanh Podcast.' });
+      return;
+    }
+    if (!uploadFile) {
+      setStatusMessage({ type: 'error', text: 'Vui lòng chọn một tệp âm thanh (.mp3, .wav, .m4a, .aac).' });
+      return;
+    }
+
+    setIsSubmitting(true);
+    setStatusMessage(null);
+    try {
+      const formData = new FormData();
+      formData.append('title', podcastTitle.trim());
+      formData.append('file', uploadFile);
+      if (selectedPost) {
+        formData.append('postId', selectedPost.id.toString());
+      }
+
+      await onUploadPodcast(formData);
+      setStatusMessage({
+        type: 'success',
+        text: `Tải lên thành công! Đã phát hành số phát thanh: "${podcastTitle}"!`,
+      });
+      setUploadFile(null);
+      if (audioPreviewUrl) {
+        URL.revokeObjectURL(audioPreviewUrl);
+        setAudioPreviewUrl(null);
+      }
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      setSelectedPost(null);
+      setPodcastTitle('');
+    } catch (err: unknown) {
+      setStatusMessage({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Tải lên podcast thất bại. Vui lòng thử lại.',
       });
     } finally {
       setIsSubmitting(false);
@@ -196,45 +267,205 @@ export const PodcastStudioTab: React.FC<PodcastStudioTabProps> = ({
           </div>
         </div>
 
-        {/* Right Column: Radio Generation Panel (7 Cols) */}
+        {/* Right Column: Radio Generation & Upload Panel (7 Cols) */}
         <div className="lg:col-span-7 bg-brand-surface/30 border border-brand-border/60 rounded-2xl p-5 space-y-4">
-          {!selectedPost ? (
-            <div className="h-full min-h-[300px] flex flex-col items-center justify-center text-center p-6 space-y-3">
-              <div className="p-4 rounded-full bg-brand-primary/10 text-brand-primary border border-brand-primary/20">
-                <Volume2 className="w-8 h-8" />
-              </div>
-              <h4 className="text-sm font-bold text-brand-textPrimary">Chưa chọn bài viết</h4>
-              <p className="text-xs text-brand-textMuted max-w-sm">
-                Vui lòng nhấp vào một bài viết từ danh sách bên trái để mở bảng khởi tạo Podcast AI.
-              </p>
-            </div>
-          ) : (
-            <form onSubmit={handleGenerate} className="space-y-4">
-              <div className="flex items-center justify-between border-b border-brand-border/60 pb-3">
-                <h4 className="text-sm font-black text-brand-textPrimary flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-brand-secondary" /> Khởi Tạo Số Phát Thanh AI
-                </h4>
-                <span className="text-[10px] font-bold text-brand-primary bg-brand-primary/10 px-2.5 py-1 rounded-md border border-brand-primary/20">
-                  Bài viết ID #{selectedPost.id}
-                </span>
-              </div>
+          {/* Mode Selector */}
+          <div className="flex items-center gap-2 p-1 bg-brand-surface rounded-xl border border-brand-border">
+            <button
+              type="button"
+              onClick={() => { setStudioMode('tts'); setStatusMessage(null); }}
+              className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                studioMode === 'tts'
+                  ? 'bg-brand-primary text-white shadow-sm'
+                  : 'text-brand-textSecondary hover:text-brand-textPrimary'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5" /> Tạo Tự Động Bằng AI (TTS)
+            </button>
+            <button
+              type="button"
+              onClick={() => { setStudioMode('upload'); setStatusMessage(null); }}
+              className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                studioMode === 'upload'
+                  ? 'btn-gold text-white shadow-sm'
+                  : 'text-brand-textSecondary hover:text-brand-textPrimary'
+              }`}
+            >
+              <Upload className="w-3.5 h-3.5" /> Tải Lên File Âm Thanh
+            </button>
+          </div>
 
-              {/* Selected Post Preview */}
-              <div className="p-3.5 rounded-xl bg-brand-surface/60 border border-brand-border/60 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-brand-secondary uppercase tracking-wider">
-                    Nội dung kịch bản lời chúc:
-                  </span>
-                  <span className="text-[10px] text-brand-textMuted font-fira">
-                    {selectedPost.department || 'Ẩn danh'}
-                  </span>
+          {studioMode === 'tts' ? (
+            /* Mode 1: AI TTS Generation */
+            !selectedPost ? (
+              <div className="h-full min-h-[300px] flex flex-col items-center justify-center text-center p-6 space-y-3">
+                <div className="p-4 rounded-full bg-brand-primary/10 text-brand-primary border border-brand-primary/20">
+                  <Volume2 className="w-8 h-8" />
                 </div>
-                <p className="text-xs italic text-brand-textPrimary leading-relaxed">
-                  "{selectedPost.message}"
+                <h4 className="text-sm font-bold text-brand-textPrimary">Chưa chọn bài viết</h4>
+                <p className="text-xs text-brand-textMuted max-w-sm">
+                  Vui lòng nhấp vào một bài viết từ danh sách bên trái để mở bảng khởi tạo Podcast AI.
                 </p>
               </div>
+            ) : (
+              <form onSubmit={handleGenerate} className="space-y-4">
+                <div className="flex items-center justify-between border-b border-brand-border/60 pb-3">
+                  <h4 className="text-sm font-black text-brand-textPrimary flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-brand-secondary" /> Khởi Tạo Số Phát Thanh AI
+                  </h4>
+                  <span className="text-[10px] font-bold text-brand-primary bg-brand-primary/10 px-2.5 py-1 rounded-md border border-brand-primary/20">
+                    Bài viết ID #{selectedPost.id}
+                  </span>
+                </div>
 
-              {/* Podcast Title Input */}
+                {/* Selected Post Preview */}
+                <div className="p-3.5 rounded-xl bg-brand-surface/60 border border-brand-border/60 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-brand-secondary uppercase tracking-wider">
+                      Nội dung kịch bản lời chúc:
+                    </span>
+                    <span className="text-[10px] text-brand-textMuted font-fira">
+                      {selectedPost.department || 'Ẩn danh'}
+                    </span>
+                  </div>
+                  <p className="text-xs italic text-brand-textPrimary leading-relaxed">
+                    "{selectedPost.message}"
+                  </p>
+                </div>
+
+                {/* Podcast Title Input */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-brand-textSecondary">
+                    Tiêu đề Số phát sóng Radio:
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Nhập tiêu đề radio..."
+                    value={podcastTitle}
+                    onChange={(e) => setPodcastTitle(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-brand-bg border border-brand-border rounded-xl text-xs text-brand-textPrimary font-semibold focus:outline-none focus:border-brand-primary transition-all"
+                  />
+                </div>
+
+                {/* Config Accordion for Azure TTS (Optional) */}
+                <div className="p-3.5 rounded-xl bg-brand-bg/60 border border-brand-border/50 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-brand-textSecondary">
+                      Cấu hình Azure Speech API (Tùy chọn)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleSaveConfig}
+                      className="text-[10px] font-bold text-brand-primary hover:underline"
+                    >
+                      Lưu cấu hình
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <input
+                      type="password"
+                      placeholder="Azure Speech API Key"
+                      value={ttsApiKey}
+                      onChange={(e) => setTtsApiKey(e.target.value)}
+                      className="px-3 py-2 bg-brand-surface border border-brand-border rounded-lg text-xs text-brand-textPrimary focus:outline-none focus:border-brand-primary"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Region (ví dụ: eastasia)"
+                      value={ttsRegion}
+                      onChange={(e) => setTtsRegion(e.target.value)}
+                      className="px-3 py-2 bg-brand-surface border border-brand-border rounded-lg text-xs text-brand-textPrimary focus:outline-none focus:border-brand-primary"
+                    />
+                  </div>
+                  <p className="text-[10px] text-brand-textMuted">
+                    *Nếu để trống API Key, hệ thống sẽ sử dụng dịch vụ ViXTTS Tiếng Việt mặc định của dự án.
+                  </p>
+                </div>
+
+                {/* Notification Banner */}
+                {statusMessage && (
+                  <div
+                    className={`p-3 rounded-xl border flex items-center gap-2 text-xs font-semibold ${
+                      statusMessage.type === 'success'
+                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                        : 'bg-rose-500/10 border-rose-500/30 text-rose-400'
+                    }`}
+                  >
+                    {statusMessage.type === 'success' ? (
+                      <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                    )}
+                    <span>{statusMessage.text}</span>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPost(null)}
+                    className="px-4 py-2 rounded-xl border border-brand-border text-xs font-bold text-brand-textSecondary hover:bg-brand-surfaceHover transition-all"
+                  >
+                    Hủy chọn
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="btn-gold flex items-center gap-2 text-xs px-5 py-2.5 rounded-xl shadow-glow-gold-sm disabled:opacity-50"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>Đang tổng hợp AI Voice...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Mic className="w-4 h-4" />
+                        <span>Khởi Tạo Podcast AI</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )
+          ) : (
+            /* Mode 2: Manual Audio File Upload */
+            <form onSubmit={handleUploadSubmit} className="space-y-4">
+              <div className="flex items-center justify-between border-b border-brand-border/60 pb-3">
+                <h4 className="text-sm font-black text-brand-textPrimary flex items-center gap-2">
+                  <Upload className="w-4 h-4 text-brand-secondary" /> Tải Lên File Âm Thanh Có Sẵn
+                </h4>
+                {selectedPost ? (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-bold text-brand-primary bg-brand-primary/10 px-2 py-0.5 rounded border border-brand-primary/20">
+                      Gắn với bài #{selectedPost.id}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPost(null)}
+                      className="text-[10px] text-brand-textMuted hover:text-brand-danger"
+                      title="Bỏ liên kết bài viết"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-[10px] text-brand-textMuted font-mono">
+                    (Số phát thanh độc lập)
+                  </span>
+                )}
+              </div>
+
+              {selectedPost && (
+                <div className="p-3 rounded-xl bg-brand-surface/60 border border-brand-border/60 text-xs text-brand-textSecondary flex items-center justify-between">
+                  <span className="truncate">"{selectedPost.message}"</span>
+                  <span className="font-bold text-brand-primary ml-2 shrink-0">{selectedPost.department}</span>
+                </div>
+              )}
+
+              {/* Title input */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold text-brand-textSecondary">
                   Tiêu đề Số phát sóng Radio:
@@ -242,46 +473,79 @@ export const PodcastStudioTab: React.FC<PodcastStudioTabProps> = ({
                 <input
                   type="text"
                   required
-                  placeholder="Nhập tiêu đề radio..."
+                  placeholder="Ví dụ: Radio IRIS 15 - Lời chúc tri ân từ Ban Lãnh Đạo..."
                   value={podcastTitle}
                   onChange={(e) => setPodcastTitle(e.target.value)}
                   className="w-full px-3.5 py-2.5 bg-brand-bg border border-brand-border rounded-xl text-xs text-brand-textPrimary font-semibold focus:outline-none focus:border-brand-primary transition-all"
                 />
               </div>
 
-              {/* Config Accordion for Azure TTS (Optional) */}
-              <div className="p-3.5 rounded-xl bg-brand-bg/60 border border-brand-border/50 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-brand-textSecondary">
-                    Cấu hình Azure Speech API (Tùy chọn)
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleSaveConfig}
-                    className="text-[10px] font-bold text-brand-primary hover:underline"
+              {/* File upload zone */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-brand-textSecondary">
+                  Tệp âm thanh (.mp3, .wav, .m4a, .aac, tối đa 50MB):
+                </label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="audio/mp3,audio/wav,audio/m4a,audio/aac,audio/ogg,audio/webm,.mp3,.wav,.m4a,.aac,.ogg,.webm,.flac"
+                  onChange={handleFileChange}
+                  className="hidden"
+                  id="podcast-file-input"
+                />
+                {!uploadFile ? (
+                  <label
+                    htmlFor="podcast-file-input"
+                    className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-brand-border hover:border-brand-secondary/60 bg-brand-surface/40 hover:bg-brand-surface rounded-2xl cursor-pointer transition-all gap-2 text-center"
                   >
-                    Lưu cấu hình
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <input
-                    type="password"
-                    placeholder="Azure Speech API Key"
-                    value={ttsApiKey}
-                    onChange={(e) => setTtsApiKey(e.target.value)}
-                    className="px-3 py-2 bg-brand-surface border border-brand-border rounded-lg text-xs text-brand-textPrimary focus:outline-none focus:border-brand-primary"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Region (ví dụ: eastasia)"
-                    value={ttsRegion}
-                    onChange={(e) => setTtsRegion(e.target.value)}
-                    className="px-3 py-2 bg-brand-surface border border-brand-border rounded-lg text-xs text-brand-textPrimary focus:outline-none focus:border-brand-primary"
-                  />
-                </div>
-                <p className="text-[10px] text-brand-textMuted">
-                  *Nếu để trống API Key, hệ thống sẽ sử dụng dịch vụ ViXTTS Tiếng Việt mặc định của dự án.
-                </p>
+                    <div className="p-3 rounded-full bg-brand-secondary/10 text-brand-secondary">
+                      <FileAudio className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-brand-textPrimary">Nhấp để chọn tệp âm thanh từ máy tính</p>
+                      <p className="text-[11px] text-brand-textMuted mt-0.5">Hỗ trợ các định dạng .mp3, .wav, .m4a, .aac (tối đa 50MB)</p>
+                    </div>
+                  </label>
+                ) : (
+                  <div className="p-4 rounded-2xl bg-brand-surface border border-brand-border space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="p-2 rounded-xl bg-amber-500/10 text-amber-500 shrink-0">
+                          <Music className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-brand-textPrimary truncate">{uploadFile.name}</p>
+                          <p className="text-[10px] text-brand-textMuted font-mono">
+                            {(uploadFile.size / (1024 * 1024)).toFixed(2)} MB
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUploadFile(null);
+                          if (audioPreviewUrl) {
+                            URL.revokeObjectURL(audioPreviewUrl);
+                            setAudioPreviewUrl(null);
+                          }
+                          if (fileInputRef.current) fileInputRef.current.value = '';
+                        }}
+                        className="text-xs font-bold text-brand-danger hover:underline px-2 py-1"
+                      >
+                        Đổi tệp khác
+                      </button>
+                    </div>
+
+                    {audioPreviewUrl && (
+                      <div className="pt-2 border-t border-brand-border/60">
+                        <span className="text-[10px] font-bold text-brand-secondary uppercase tracking-wider block mb-1.5 flex items-center gap-1">
+                          <Play className="w-3 h-3" /> Nghe thử trước khi tải lên:
+                        </span>
+                        <audio controls src={audioPreviewUrl} className="w-full h-9 rounded-lg" />
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Notification Banner */}
@@ -305,26 +569,19 @@ export const PodcastStudioTab: React.FC<PodcastStudioTabProps> = ({
               {/* Action Buttons */}
               <div className="flex items-center justify-end gap-3 pt-2">
                 <button
-                  type="button"
-                  onClick={() => setSelectedPost(null)}
-                  className="px-4 py-2 rounded-xl border border-brand-border text-xs font-bold text-brand-textSecondary hover:bg-brand-surfaceHover transition-all"
-                >
-                  Hủy chọn
-                </button>
-                <button
                   type="submit"
-                  disabled={isSubmitting}
-                  className="btn-gold flex items-center gap-2 text-xs px-5 py-2.5 rounded-xl shadow-glow-gold-sm disabled:opacity-50"
+                  disabled={isSubmitting || !uploadFile}
+                  className="btn-gold flex items-center gap-2 text-xs px-6 py-2.5 rounded-xl shadow-glow-gold-sm disabled:opacity-50"
                 >
                   {isSubmitting ? (
                     <>
-                      <div className="w-3.5 h-3.5 border-2 border-brand-bg border-t-transparent rounded-full animate-spin" />
-                      <span>Đang tổng hợp AI Voice...</span>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Đang tải lên và xuất bản...</span>
                     </>
                   ) : (
                     <>
-                      <Mic className="w-4 h-4" />
-                      <span>Khởi Tạo Podcast AI</span>
+                      <Upload className="w-4 h-4" />
+                      <span>Tải Lên & Xuất Bản Radio</span>
                     </>
                   )}
                 </button>

@@ -25,12 +25,57 @@ public static class BackdropEndpoints
         // ── Ước lượng trước khi dựng ────────────────────────────────────────
         group.MapGet("/preflight", async Task<Ok<BackdropPreflightResponse>> (
             IBackdropRenderer renderer,
+            IPostService postService,
+            IMosaicLayoutService layoutService,
             IOptions<BackdropOptions> options,
             [AsParameters] BackdropSpecQuery query,
             CancellationToken ct) =>
         {
             var spec = query.ToSpec(options.Value);
             var pre = await renderer.PreflightAsync(spec, ct);
+            var posts = await postService.GetMosaicPostRefsAsync(ct);
+            var layout = layoutService.Build(posts);
+
+            ExistingBackdropFileDto? existingFile = null;
+            var webRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+            var cacheDir = Path.Combine(webRoot, options.Value.CacheDirectory.Replace('/', Path.DirectorySeparatorChar));
+            if (Directory.Exists(cacheDir))
+            {
+                var themePrefix = $"IRIS15_{spec.Theme.ToString().ToLowerInvariant()}_";
+                var files = Directory.GetFiles(cacheDir)
+                    .Where(f => !f.EndsWith("_preview.jpg", StringComparison.OrdinalIgnoreCase) &&
+                               (f.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
+                                f.EndsWith(".tif", StringComparison.OrdinalIgnoreCase) ||
+                                f.EndsWith(".png", StringComparison.OrdinalIgnoreCase)))
+                    .Select(f => new FileInfo(f))
+                    .Where(f => f.Name.StartsWith(themePrefix, StringComparison.OrdinalIgnoreCase))
+                    .OrderByDescending(f => f.LastWriteTimeUtc)
+                    .ToList();
+
+                if (files.Count > 0)
+                {
+                    var latest = files[0];
+                    var previewCandidate = Path.Combine(cacheDir, Path.GetFileNameWithoutExtension(latest.Name) + "_preview.jpg");
+                    var hasPreview = File.Exists(previewCandidate);
+                    var isCurrent = latest.Name.Contains(layout.LayoutId[..Math.Min(8, layout.LayoutId.Length)], StringComparison.OrdinalIgnoreCase);
+
+                    int? photoCountInFile = null;
+                    var match = System.Text.RegularExpressions.Regex.Match(latest.Name, @"_N(\d+)_");
+                    if (match.Success && int.TryParse(match.Groups[1].Value, out var n))
+                    {
+                        photoCountInFile = n;
+                    }
+
+                    existingFile = new ExistingBackdropFileDto(
+                        FileName: latest.Name,
+                        FileBytes: latest.Length,
+                        CreatedAt: latest.LastWriteTimeUtc,
+                        PreviewUrl: hasPreview ? $"/uploads/backdrop/{Path.GetFileName(previewCandidate)}" : $"/uploads/backdrop/{latest.Name}",
+                        DownloadUrl: $"/uploads/backdrop/{latest.Name}",
+                        IsCurrentLayout: isCurrent,
+                        PhotoCountInFile: photoCountInFile);
+                }
+            }
 
             return TypedResults.Ok(new BackdropPreflightResponse(
                 PhotoCount: pre.PhotoCount,
@@ -49,11 +94,12 @@ public static class BackdropEndpoints
                 Theme: spec.Theme.ToString(),
                 LowResolutionPhotos: pre.LowResolutionPhotos
                     .Select(w => new BackdropWarningDto(w.PostId, w.SourceShortEdgePx, w.RequiredPx))
-                    .ToList()));
+                    .ToList(),
+                ExistingFile: existingFile));
         })
         .WithName("BackdropPreflight")
         .WithSummary("Ước lượng file in trước khi dựng")
-        .WithDescription("Trả về kích thước pixel, bộ nhớ ước tính và danh sách ảnh không đủ nét cho ô được gán.");
+        .WithDescription("Trả về kích thước pixel, bộ nhớ ước tính và thông tin file in gần nhất (nếu có).");
 
         // ── Đặt job dựng ────────────────────────────────────────────────────
         group.MapPost("/jobs", async Task<Results<Accepted<BackdropJobResponse>, Ok<BackdropJobResponse>, ProblemHttpResult>> (
@@ -62,6 +108,7 @@ public static class BackdropEndpoints
             IMosaicLayoutService layoutService,
             IOptions<BackdropOptions> options,
             [AsParameters] BackdropSpecQuery query,
+            [FromQuery] bool force,
             CancellationToken ct) =>
         {
             var spec = query.ToSpec(options.Value);
@@ -69,9 +116,35 @@ public static class BackdropEndpoints
             var layout = layoutService.Build(posts);
             var specHash = spec.Hash();
 
-            // Cùng bố cục + cùng thông số thì trả lại kết quả cũ, không dựng lại.
-            if (queue.TryGetCompleted(layout.LayoutId, specHash, out var cached))
+            // Nếu không force: Kiểm tra queue đã hoàn thành
+            if (!force && queue.TryGetCompleted(layout.LayoutId, specHash, out var cached))
                 return TypedResults.Ok(ToResponse(cached));
+
+            var webRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+            var cacheDir = Path.Combine(webRoot, options.Value.CacheDirectory.Replace('/', Path.DirectorySeparatorChar));
+            var expectedFileName = spec.FileName(layout.LayoutId, layout.PhotoCount);
+            var expectedPath = Path.Combine(cacheDir, expectedFileName);
+
+            // Nếu không force và file đã tồn tại trên đĩa thì trả về ngay (Zero CPU/RAM)
+            if (!force && File.Exists(expectedPath))
+            {
+                var previewPath = Path.Combine(cacheDir, Path.GetFileNameWithoutExtension(expectedFileName) + "_preview.jpg");
+                var existingJob = new BackdropJob
+                {
+                    Id = Guid.NewGuid(),
+                    Spec = spec,
+                    LayoutId = layout.LayoutId,
+                    PhotoCount = layout.PhotoCount,
+                    State = BackdropJobState.Completed,
+                    Progress = 1.0,
+                    Stage = "Hoàn tất (bản in có sẵn)",
+                    FilePath = expectedPath,
+                    PreviewPath = File.Exists(previewPath) ? previewPath : expectedPath,
+                    FileBytes = new FileInfo(expectedPath).Length
+                };
+                queue.Register(existingJob, specHash);
+                return TypedResults.Ok(ToResponse(existingJob));
+            }
 
             var job = new BackdropJob
             {

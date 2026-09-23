@@ -85,7 +85,51 @@ public static class AdminEndpoints
         .WithSummary("Tạo Podcast AI từ bài viết")
         .WithDescription("Gọi dịch vụ Azure Text-to-Speech API để chuyển đổi nội dung lời chúc thành file audio phát thanh.");
 
-        // 4. Endpoint xuất backdrop cũ đã chuyển sang /api/backdrop/*.
+        // 4. Tải lên tệp âm thanh Podcast thủ công (.mp3, .wav, .m4a, .ogg, .aac, .webm)
+        group.MapPost("/podcasts/upload", async Task<Results<Ok<PodcastResponse>, BadRequest<string>>> (
+            IFormFile file,
+            [FromForm] string title,
+            [FromForm] int? postId,
+            [FromForm] int? durationSeconds,
+            IPodcastService podcastService,
+            CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                return TypedResults.BadRequest("Tiêu đề số phát thanh Podcast không được để trống.");
+            }
+
+            if (file == null || file.Length == 0)
+            {
+                return TypedResults.BadRequest("Vui lòng chọn tệp âm thanh hợp lệ.");
+            }
+
+            try
+            {
+                var response = await podcastService.UploadPodcastAudioAsync(
+                    postId,
+                    title,
+                    file,
+                    durationSeconds,
+                    ct);
+
+                return TypedResults.Ok(response);
+            }
+            catch (System.ArgumentException ex)
+            {
+                return TypedResults.BadRequest(ex.Message);
+            }
+            catch (System.Exception ex)
+            {
+                return TypedResults.BadRequest($"Lỗi khi tải lên file âm thanh: {ex.Message}");
+            }
+        })
+        .DisableAntiforgery()
+        .WithName("UploadPodcastAudio")
+        .WithSummary("Tải lên file Podcast thủ công")
+        .WithDescription("Cho phép Ban tổ chức tải lên trực tiếp file âm thanh (.mp3, .wav, .m4a, .aac) tự chuẩn bị hoặc sinh trước ở local.");
+
+        // 5. Endpoint xuất backdrop cũ đã chuyển sang /api/backdrop/*.
         //    Bản cũ dựng ảnh ngay trong request và bị giao diện gọi hai lần cho
         //    mỗi lần xem, nên dựng trọn vẹn hai lượt.
         group.MapGet("/backdrop", () => TypedResults.Redirect("/api/backdrop/preflight", permanent: true))

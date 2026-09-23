@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Download, Image as ImageIcon, Loader2, Maximize2, TriangleAlert, X, ZoomIn, ZoomOut } from 'lucide-react';
+import { CheckCircle2, Download, Image as ImageIcon, Loader2, Maximize2, RotateCw, TriangleAlert, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { ModalShell } from './ModalShell';
 
 interface BackdropWarning {
@@ -26,6 +26,16 @@ interface BackdropJob {
 
 type BackdropTheme = 'dark' | 'light';
 
+interface ExistingBackdropFile {
+  fileName: string;
+  fileBytes: number;
+  createdAt: string;
+  previewUrl: string;
+  downloadUrl: string;
+  isCurrentLayout: boolean;
+  photoCountInFile?: number | null;
+}
+
 interface Preflight {
   photoCount: number;
   minPhotos: number;
@@ -41,6 +51,7 @@ interface Preflight {
   largestTileEdgePx: number;
   format: string;
   lowResolutionPhotos: BackdropWarning[];
+  existingFile?: ExistingBackdropFile | null;
 }
 
 interface Props {
@@ -110,25 +121,31 @@ export function BackdropViewerModal({ isOpen, onClose }: Props) {
     }
   }, []);
 
-  // Ước lượng ngay khi mở, để admin thấy khổ và bộ nhớ trước khi bấm dựng.
-  useEffect(() => {
-    if (!isOpen) return;
-    const controller = new AbortController();
+  const fetchPreflight = useCallback((currentTheme: BackdropTheme, signal?: AbortSignal) => {
     setError(null);
-
-    fetch('/api/backdrop/preflight', { signal: controller.signal })
+    fetch(`/api/backdrop/preflight?theme=${currentTheme}`, { signal })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then(setPreflight)
       .catch((e: unknown) => {
         if (e instanceof Error && e.name === 'AbortError') return;
         setError('Không lấy được thông số bản in.');
       });
+  }, []);
+
+  // Ước lượng ngay khi mở hoặc khi đổi nền, để admin thấy khổ và bộ nhớ trước khi bấm dựng.
+  useEffect(() => {
+    if (!isOpen) return;
+    const controller = new AbortController();
+    fetchPreflight(theme, controller.signal);
 
     return () => {
       controller.abort();
       stopPolling();
     };
-  }, [isOpen, stopPolling]);
+  }, [isOpen, theme, fetchPreflight, stopPolling]);
+
+  const isOpenRef = useRef(isOpen);
+  isOpenRef.current = isOpen;
 
   const poll = useCallback(
     (jobId: string) => {
@@ -137,6 +154,7 @@ export function BackdropViewerModal({ isOpen, onClose }: Props) {
           const res = await fetch(`/api/backdrop/jobs/${jobId}`);
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const next: BackdropJob = await res.json();
+          if (!isOpenRef.current) return;
           setJob(next);
 
           if (next.state === 'Queued' || next.state === 'Running') {
@@ -145,6 +163,7 @@ export function BackdropViewerModal({ isOpen, onClose }: Props) {
             setError(next.error ?? 'Dựng file in thất bại.');
           }
         } catch {
+          if (!isOpenRef.current) return;
           setError('Mất kết nối khi theo dõi tiến độ.');
         }
       };
@@ -153,21 +172,48 @@ export function BackdropViewerModal({ isOpen, onClose }: Props) {
     [],
   );
 
-  const startRender = useCallback(async () => {
+  const useExistingFile = useCallback(() => {
+    if (!preflight?.existingFile) return;
+    stopPolling();
     setError(null);
     setScale(1);
-    stopPolling();
-    try {
-      const res = await fetch(`/api/backdrop/jobs?theme=${theme}`, { method: 'POST' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const created: BackdropJob = await res.json();
-      setJob(created);
-      // 200 nghĩa là đã có sẵn file khớp bố cục và thông số; 202 thì phải chờ.
-      if (created.state !== 'Completed') poll(created.jobId);
-    } catch {
-      setError('Không đặt được yêu cầu dựng file in.');
-    }
-  }, [poll, stopPolling, theme]);
+    setJob({
+      jobId: 'existing',
+      state: 'Completed',
+      progress: 1,
+      stage: 'Đã sẵn sàng từ bộ đệm máy chủ',
+      error: null,
+      photoCount: preflight.existingFile.photoCountInFile ?? preflight.photoCount,
+      fileName: preflight.existingFile.fileName,
+      fileBytes: preflight.existingFile.fileBytes,
+      canvasWidthPx: preflight.canvasWidthPx,
+      canvasHeightPx: preflight.canvasHeightPx,
+      previewUrl: preflight.existingFile.previewUrl,
+      downloadUrl: preflight.existingFile.downloadUrl,
+      warnings: preflight.lowResolutionPhotos ?? [],
+    });
+  }, [preflight, stopPolling]);
+
+  const startRender = useCallback(
+    async (force = false) => {
+      setError(null);
+      setScale(1);
+      stopPolling();
+      try {
+        const res = await fetch(`/api/backdrop/jobs?theme=${theme}&force=${force ? 'true' : 'false'}`, {
+          method: 'POST',
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const created: BackdropJob = await res.json();
+        setJob(created);
+        // 200 nghĩa là đã có sẵn file khớp bố cục và thông số; 202 thì phải chờ.
+        if (created.state !== 'Completed') poll(created.jobId);
+      } catch {
+        setError('Không đặt được yêu cầu dựng file in.');
+      }
+    },
+    [poll, stopPolling, theme],
+  );
 
   useEffect(() => {
     if (!isOpen) {
@@ -177,7 +223,7 @@ export function BackdropViewerModal({ isOpen, onClose }: Props) {
     }
   }, [isOpen, stopPolling]);
 
-  // Đổi nền là đổi file: quay về trạng thái chờ dựng thay vì hiện bản cũ.
+  // Đổi nền: reset trạng thái xem để tải lại thông số và bản in tương ứng
   const handleThemeChange = useCallback(
     (next: BackdropTheme) => {
       if (next === theme) return;
@@ -262,9 +308,61 @@ export function BackdropViewerModal({ isOpen, onClose }: Props) {
                 </p>
               )}
               <ThemePicker value={theme} onChange={handleThemeChange} />
-              <button onClick={startRender} className="btn-gold text-xs px-5 py-2.5">
-                Dựng file in
-              </button>
+
+              {preflight?.existingFile ? (
+                <div className="bg-brand-surface border border-brand-border/80 rounded-xl p-4 text-left space-y-3 shadow-lg">
+                  <div className="flex items-center justify-between border-b border-brand-border/60 pb-2">
+                    <span className="text-xs font-bold text-brand-textPrimary flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                      Phát hiện bản in đã xuất trước đó
+                    </span>
+                    <span className="text-[10px] font-mono text-brand-textMuted">
+                      {new Date(preflight.existingFile.createdAt).toLocaleDateString('vi-VN')} {new Date(preflight.existingFile.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5 text-xs text-brand-textSecondary">
+                    <p className="font-mono text-[11px] text-brand-primary truncate" title={preflight.existingFile.fileName}>
+                      📄 {preflight.existingFile.fileName}
+                    </p>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-brand-textMuted">
+                      <span>Dung lượng: <strong className="text-brand-textPrimary">{mb(preflight.existingFile.fileBytes)}</strong></span>
+                      <span>Chứa: <strong className="text-brand-textPrimary">{preflight.existingFile.photoCountInFile ?? preflight.photoCount}</strong> ảnh</span>
+                    </div>
+
+                    {preflight.existingFile.isCurrentLayout ? (
+                      <p className="text-[11px] text-emerald-400 font-medium bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-md flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> Bản in này khớp hoàn toàn với số ảnh và bố cục kỷ niệm hiện tại.
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-amber-400 font-medium bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-md flex items-center gap-1.5">
+                        <TriangleAlert className="w-3.5 h-3.5 shrink-0" /> Số lượng ảnh ({preflight.photoCount} bài duyệt) có thể đã cập nhật so với bản in này ({preflight.existingFile.photoCountInFile ?? '?'} ảnh).
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="pt-2 border-t border-brand-border/60 flex flex-col sm:flex-row gap-2">
+                    <button
+                      type="button"
+                      onClick={useExistingFile}
+                      className="flex-1 btn-gold text-xs py-2 px-3 flex items-center justify-center gap-1.5 font-bold shadow-md"
+                    >
+                      <Download className="w-3.5 h-3.5" /> Dùng bản in cũ này (Xem / Tải ngay)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => startRender(true)}
+                      className="flex-1 px-3 py-2 text-xs font-semibold rounded-md border border-brand-border text-brand-textSecondary hover:text-brand-textPrimary hover:bg-brand-surfaceHover transition-colors flex items-center justify-center gap-1.5"
+                    >
+                      <RotateCw className="w-3.5 h-3.5" /> Xuất file mới (Dựng lại)
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button onClick={() => startRender(false)} className="btn-gold text-xs px-5 py-2.5">
+                  Dựng file in
+                </button>
+              )}
             </div>
           )}
 
@@ -316,14 +414,15 @@ export function BackdropViewerModal({ isOpen, onClose }: Props) {
                   <ZoomIn className="w-4 h-4" />
                 </button>
                 <button
-                  onClick={startRender}
-                  className="text-[11px] font-semibold px-3 py-2 rounded-md border border-brand-border text-brand-textSecondary hover:text-brand-textPrimary transition-colors"
+                  onClick={() => startRender(true)}
+                  className="text-[11px] font-semibold px-3 py-2 rounded-md border border-brand-border text-brand-textSecondary hover:text-brand-textPrimary hover:bg-brand-surfaceHover transition-colors flex items-center gap-1.5"
+                  title="Dựng lại file in mới với bố cục ảnh hiện tại"
                 >
-                  Dựng lại
+                  <RotateCw className="w-3.5 h-3.5" /> Dựng lại bản mới
                 </button>
                 {/* Tải file master: chỉ truyền khi bấm, không phải khi xem. */}
                 <a
-                  href={job!.downloadUrl!}
+                  href={job?.downloadUrl || '#'}
                   download
                   className="btn-gold text-xs px-4 py-2.5 inline-flex items-center gap-1.5"
                 >

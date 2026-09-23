@@ -24,6 +24,7 @@ export const MemoryCardExportModal: React.FC<MemoryCardExportModalProps> = ({
   onClose,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [cardTheme, setCardTheme] = useState<'light' | 'dark'>('light');
   const [isGenerating, setIsGenerating] = useState(true);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
 
@@ -40,26 +41,37 @@ export const MemoryCardExportModal: React.FC<MemoryCardExportModalProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    const isLight = cardTheme === 'light';
+
     // Kích thước chuẩn Story / Card 4:5 sắc nét: 1080 x 1350
     const width = 1080;
     const height = 1350;
     canvas.width = width;
     canvas.height = height;
 
-    // 1. Vẽ nền Gradient Hoàng gia (Royal Navy & Dark Amber)
+    // 1. Vẽ nền Gradient (Nền Sáng Giấy Ngà Ấm hoặc Nền Tối Hoàng Gia)
     const bgGradient = ctx.createLinearGradient(0, 0, width, height);
-    bgGradient.addColorStop(0, '#0B0F19');
-    bgGradient.addColorStop(0.5, '#111827');
-    bgGradient.addColorStop(1, '#070A10');
+    if (isLight) {
+      bgGradient.addColorStop(0, '#FCFBF8');
+      bgGradient.addColorStop(0.5, '#F8F4EA');
+      bgGradient.addColorStop(1, '#F0E7D5');
+    } else {
+      bgGradient.addColorStop(0, '#0B0F19');
+      bgGradient.addColorStop(0.5, '#111827');
+      bgGradient.addColorStop(1, '#070A10');
+    }
     ctx.fillStyle = bgGradient;
     ctx.fillRect(0, 0, width, height);
 
     // 2. Hoa văn viền vàng kim nghệ thuật (Double Gold Border)
-    ctx.strokeStyle = '#D4AF37';
+    const primaryGold = isLight ? '#C88D2A' : '#D4AF37';
+    const subGold = isLight ? 'rgba(200, 141, 42, 0.45)' : 'rgba(212, 175, 55, 0.4)';
+
+    ctx.strokeStyle = primaryGold;
     ctx.lineWidth = 4;
     ctx.strokeRect(40, 40, width - 80, height - 80);
 
-    ctx.strokeStyle = 'rgba(212, 175, 55, 0.4)';
+    ctx.strokeStyle = subGold;
     ctx.lineWidth = 1.5;
     ctx.strokeRect(52, 52, width - 104, height - 104);
 
@@ -70,7 +82,7 @@ export const MemoryCardExportModal: React.FC<MemoryCardExportModalProps> = ({
       [40, height - 40],
       [width - 40, height - 40],
     ];
-    ctx.fillStyle = '#D4AF37';
+    ctx.fillStyle = primaryGold;
     corners.forEach(([cx, cy]) => {
       ctx.beginPath();
       ctx.arc(cx, cy, 6, 0, Math.PI * 2);
@@ -79,17 +91,17 @@ export const MemoryCardExportModal: React.FC<MemoryCardExportModalProps> = ({
 
     // 3. Header: Kỷ niệm 15 năm IRIS
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#F5D77F';
+    ctx.fillStyle = isLight ? '#A6701A' : '#F5D77F';
     ctx.font = 'bold 26px "Montserrat", sans-serif';
     ctx.letterSpacing = '6px';
     ctx.fillText('2011 — 2026 · KỶ NIỆM 15 NĂM', width / 2, 110);
 
-    ctx.fillStyle = '#FFFFFF';
+    ctx.fillStyle = isLight ? '#1E3F8C' : '#FFFFFF';
     ctx.font = '900 48px "Archivo", sans-serif';
     ctx.letterSpacing = '2px';
     ctx.fillText('IRIS ANNIVERSARY', width / 2, 170);
 
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.fillStyle = isLight ? '#5C6980' : 'rgba(255, 255, 255, 0.6)';
     ctx.font = 'italic 20px "Be Vietnam Pro", sans-serif';
     ctx.letterSpacing = '1px';
     ctx.fillText('“Mỗi Kỷ Niệm — Một Mảnh Ghép Thắp Sáng Hành Trình Vàng”', width / 2, 210);
@@ -97,7 +109,7 @@ export const MemoryCardExportModal: React.FC<MemoryCardExportModalProps> = ({
     // Đường kẻ phân cách vàng kim
     const sepGrad = ctx.createLinearGradient(width / 2 - 200, 0, width / 2 + 200, 0);
     sepGrad.addColorStop(0, 'transparent');
-    sepGrad.addColorStop(0.5, '#D4AF37');
+    sepGrad.addColorStop(0.5, primaryGold);
     sepGrad.addColorStop(1, 'transparent');
     ctx.strokeStyle = sepGrad;
     ctx.lineWidth = 2;
@@ -119,7 +131,7 @@ export const MemoryCardExportModal: React.FC<MemoryCardExportModalProps> = ({
       const imgH = 500;
 
       ctx.save();
-      ctx.strokeStyle = '#D4AF37';
+      ctx.strokeStyle = primaryGold;
       ctx.lineWidth = 3;
       ctx.strokeRect(imgX - 4, imgY - 4, imgW + 8, imgH + 8);
 
@@ -147,9 +159,9 @@ export const MemoryCardExportModal: React.FC<MemoryCardExportModalProps> = ({
           photoImg.height * ratio
         );
       } else {
-        ctx.fillStyle = '#1E293B';
+        ctx.fillStyle = isLight ? '#EAE5D9' : '#1E293B';
         ctx.fillRect(imgX, imgY, imgW, imgH);
-        ctx.fillStyle = '#94A3B8';
+        ctx.fillStyle = isLight ? '#7C8BA1' : '#94A3B8';
         ctx.font = 'bold 24px sans-serif';
         ctx.fillText('Hình ảnh kỷ niệm IRIS 15', width / 2, imgY + imgH / 2);
       }
@@ -158,8 +170,8 @@ export const MemoryCardExportModal: React.FC<MemoryCardExportModalProps> = ({
       // 5. Khung chứa Lời chúc (Quote box)
       const quoteBoxY = 810;
       const quoteBoxH = 340;
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
-      ctx.strokeStyle = 'rgba(212, 175, 55, 0.25)';
+      ctx.fillStyle = isLight ? 'rgba(255, 255, 255, 0.88)' : 'rgba(255, 255, 255, 0.04)';
+      ctx.strokeStyle = isLight ? 'rgba(200, 141, 42, 0.4)' : 'rgba(212, 175, 55, 0.25)';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.roundRect(140, quoteBoxY, imgW, quoteBoxH, 16);
@@ -167,13 +179,13 @@ export const MemoryCardExportModal: React.FC<MemoryCardExportModalProps> = ({
       ctx.stroke();
 
       // Dấu ngoặc kép lớn
-      ctx.fillStyle = 'rgba(212, 175, 55, 0.3)';
+      ctx.fillStyle = isLight ? 'rgba(200, 141, 42, 0.35)' : 'rgba(212, 175, 55, 0.3)';
       ctx.font = 'bold 80px serif';
       ctx.textAlign = 'left';
       ctx.fillText('“', 165, quoteBoxY + 70);
 
       // Nội dung lời chúc (chia dòng văn bản)
-      ctx.fillStyle = '#F1F5F9';
+      ctx.fillStyle = isLight ? '#1A253B' : '#F1F5F9';
       ctx.font = '24px "Be Vietnam Pro", sans-serif';
       ctx.letterSpacing = '0px';
 
@@ -204,11 +216,11 @@ export const MemoryCardExportModal: React.FC<MemoryCardExportModalProps> = ({
       ctx.fillText(line, 180, textY);
 
       // Phòng ban & Ngày tháng
-      ctx.fillStyle = '#F5D77F';
+      ctx.fillStyle = isLight ? '#A6701A' : '#F5D77F';
       ctx.font = 'bold 22px "Montserrat", sans-serif';
       ctx.fillText(`Phòng ban: ${post.department || 'Đại gia đình IRIS'}`, 180, quoteBoxY + quoteBoxH - 50);
 
-      ctx.fillStyle = '#94A3B8';
+      ctx.fillStyle = isLight ? '#5C6980' : '#94A3B8';
       ctx.font = '18px "Fira Code", monospace';
       const dateStr = new Date(post.createdAt).toLocaleDateString('vi-VN');
       ctx.fillText(`Thời gian: ${dateStr}`, 180, quoteBoxY + quoteBoxH - 22);
@@ -221,19 +233,19 @@ export const MemoryCardExportModal: React.FC<MemoryCardExportModalProps> = ({
       ctx.translate(sealX, sealY);
       ctx.rotate(-0.08);
 
-      ctx.strokeStyle = '#D4AF37';
+      ctx.strokeStyle = primaryGold;
       ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.arc(0, 0, 52, 0, Math.PI * 2);
       ctx.stroke();
 
-      ctx.strokeStyle = 'rgba(212, 175, 55, 0.4)';
+      ctx.strokeStyle = subGold;
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.arc(0, 0, 46, 0, Math.PI * 2);
       ctx.stroke();
 
-      ctx.fillStyle = '#D4AF37';
+      ctx.fillStyle = isLight ? '#A6701A' : '#D4AF37';
       ctx.font = 'bold 12px "Montserrat", sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('OFFICIAL MEMORY', 0, -18);
@@ -245,7 +257,7 @@ export const MemoryCardExportModal: React.FC<MemoryCardExportModalProps> = ({
 
       // 7. Footer
       ctx.textAlign = 'center';
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+      ctx.fillStyle = isLight ? '#5C6980' : 'rgba(255, 255, 255, 0.4)';
       ctx.font = '16px "Fira Code", monospace';
       ctx.fillText('www.iris.vn · Tự Hào Chặng Đường Vàng 2011 - 2026', width / 2, 1260);
 
@@ -260,7 +272,7 @@ export const MemoryCardExportModal: React.FC<MemoryCardExportModalProps> = ({
     } else {
       drawRemainingContent();
     }
-  }, [isOpen, post]);
+  }, [isOpen, post, cardTheme]);
 
   const handleDownload = () => {
     if (!downloadUrl || !post) return;
@@ -291,13 +303,43 @@ export const MemoryCardExportModal: React.FC<MemoryCardExportModalProps> = ({
           Bức thiệp mạ vàng chứng nhận mảnh ghép kỷ niệm của bạn, đã được định dạng sẵn tỉ lệ Story để dễ dàng chia sẻ lên mạng xã hội!
         </p>
 
+        {/* Bộ chọn phong cách nền thiệp */}
+        <div className="flex items-center gap-1.5 p-1 bg-brand-surface rounded-xl border border-brand-border w-full justify-center">
+          <button
+            type="button"
+            onClick={() => setCardTheme('light')}
+            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+              cardTheme === 'light'
+                ? 'bg-amber-500 text-white shadow-sm'
+                : 'text-brand-textSecondary hover:text-brand-textPrimary'
+            }`}
+          >
+            ☀️ Nền Sáng Hoàng Kim
+          </button>
+          <button
+            type="button"
+            onClick={() => setCardTheme('dark')}
+            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+              cardTheme === 'dark'
+                ? 'bg-slate-900 text-amber-300 border border-amber-500/40 shadow-sm'
+                : 'text-brand-textSecondary hover:text-brand-textPrimary'
+            }`}
+          >
+            🌙 Nền Tối Hoàng Gia
+          </button>
+        </div>
+
         {/* Khung xem trước thiệp */}
-        <div className="relative w-full aspect-[4/5] rounded-xl overflow-hidden border border-brand-secondary/40 shadow-xl bg-slate-950 flex items-center justify-center">
+        <div className={`relative w-full aspect-[4/5] rounded-xl overflow-hidden border border-brand-secondary/40 shadow-xl flex items-center justify-center transition-colors ${
+          cardTheme === 'light' ? 'bg-[#F8F4EA]' : 'bg-slate-950'
+        }`}>
           <canvas ref={canvasRef} className="w-full h-full object-contain" />
           {isGenerating && (
-            <div className="absolute inset-0 bg-slate-950/80 flex flex-col items-center justify-center gap-2">
+            <div className={`absolute inset-0 flex flex-col items-center justify-center gap-2 ${
+              cardTheme === 'light' ? 'bg-[#F8F4EA]/85 text-amber-700' : 'bg-slate-950/80 text-brand-secondary'
+            }`}>
               <div className="w-8 h-8 border-2 border-brand-secondary border-t-transparent rounded-full animate-spin" />
-              <span className="text-xs text-brand-secondary font-mono">ĐANG MẠ VÀNG THIỆP…</span>
+              <span className="text-xs font-mono font-bold">ĐANG MẠ VÀNG THIỆP…</span>
             </div>
           )}
         </div>

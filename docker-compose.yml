@@ -7,14 +7,11 @@ services:
       - "8080:80"
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - TtsSettings__ActiveProvider=ViXtts
+      - TtsSettings__ActiveProvider=Azure
       - TtsSettings__EnableFallbackToAzure=true
-      - TtsSettings__ViXtts__BaseUrl=http://vixtts-service:8000
     volumes:
-      - podcast-data:/app/wwwroot/uploads/podcasts
-    depends_on:
-      vixtts-service:
-        condition: service_healthy
+      - ./Data:/app/Data
+      - ./uploads:/app/wwwroot/uploads
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80/healthz"]
       interval: 15s
@@ -22,29 +19,3 @@ services:
       retries: 3
       start_period: 15s
     restart: always
-
-  vixtts-service:
-    build:
-      context: ./services/vixtts
-      dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    volumes:
-      - ./services/vixtts/checkpoints:/app/checkpoints
-      - ./services/vixtts/voices:/app/voices
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: always
-
-volumes:
-  podcast-data:

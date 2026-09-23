@@ -168,4 +168,88 @@ public sealed class PodcastService : IPodcastService
         await _context.SaveChangesAsync(ct);
         return true;
     }
+
+    public async Task<PodcastResponse> UploadPodcastAudioAsync(int? postId, string title, Microsoft.AspNetCore.Http.IFormFile audioFile, int? durationSeconds, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            throw new ArgumentException("Tiêu đề số phát thanh Podcast không được để trống.", nameof(title));
+        }
+
+        if (audioFile == null || audioFile.Length == 0)
+        {
+            throw new ArgumentException("File âm thanh không hợp lệ hoặc rỗng.", nameof(audioFile));
+        }
+
+        const long maxSizeBytes = 50 * 1024 * 1024; // 50MB
+        if (audioFile.Length > maxSizeBytes)
+        {
+            throw new ArgumentException("Dung lượng file âm thanh vượt quá giới hạn cho phép (tối đa 50MB).", nameof(audioFile));
+        }
+
+        var ext = Path.GetExtension(audioFile.FileName).ToLowerInvariant();
+        var allowedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".mp3", ".wav", ".m4a", ".ogg", ".aac", ".webm", ".flac"
+        };
+
+        if (string.IsNullOrEmpty(ext) || !allowedExtensions.Contains(ext))
+        {
+            throw new ArgumentException($"Định dạng file '{ext}' không được hỗ trợ. Vui lòng tải lên file âm thanh (.mp3, .wav, .m4a, .ogg, .aac).", nameof(audioFile));
+        }
+
+        if (postId.HasValue)
+        {
+            var postExists = await _context.MemoryPosts.AnyAsync(p => p.Id == postId.Value, ct);
+            if (!postExists)
+            {
+                _logger.LogWarning("Không tìm thấy bài viết ID={PostId} để liên kết podcast, tiếp tục tạo podcast độc lập.", postId.Value);
+                postId = null;
+            }
+        }
+
+        var podcastDir = Path.Combine(_webRootPath, "uploads", "podcasts");
+        if (!Directory.Exists(podcastDir))
+        {
+            Directory.CreateDirectory(podcastDir);
+        }
+
+        var postPrefix = postId.HasValue ? postId.Value.ToString() : "custom";
+        var uniqueFileName = $"podcast-upload-{postPrefix}-{Guid.NewGuid().ToString()[..8]}{ext}";
+        var relativePath = $"/uploads/podcasts/{uniqueFileName}";
+        var absolutePath = Path.Combine(podcastDir, uniqueFileName);
+
+        await using (var fileStream = new FileStream(absolutePath, FileMode.Create))
+        {
+            await audioFile.CopyToAsync(fileStream, ct);
+        }
+
+        int duration = durationSeconds.GetValueOrDefault();
+        if (duration <= 0)
+        {
+            duration = Math.Max(10, (int)(audioFile.Length / 16000));
+        }
+
+        var episode = new PodcastEpisode
+        {
+            PostId = postId,
+            Title = title.Trim(),
+            AudioPath = relativePath,
+            DurationSeconds = duration,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+
+        _context.PodcastEpisodes.Add(episode);
+        await _context.SaveChangesAsync(ct);
+
+        _logger.LogInformation("Tải lên thành công podcast tập ID={EpisodeId} ({Title}) đường dẫn: {AudioPath}", episode.Id, episode.Title, episode.AudioPath);
+
+        return new PodcastResponse(
+            episode.Id,
+            episode.PostId,
+            episode.Title,
+            episode.AudioPath,
+            episode.DurationSeconds,
+            episode.CreatedAt);
+    }
 }

@@ -212,6 +212,19 @@ function App() {
     fetchData();
   };
 
+  const handleUploadPodcast = async (formData: FormData) => {
+    const res = await fetch('/api/admin/podcasts/upload', {
+      method: 'POST',
+      body: formData,
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(errText || 'Thất bại khi tải file âm thanh lên máy chủ.');
+    }
+    triggerToast('Tải lên và phát hành Podcast thành công!', 'success');
+    fetchData();
+  };
+
   const handleDeletePodcast = async (id: number) => {
     const res = await fetch(`/api/admin/podcasts/${id}`, { method: 'DELETE' });
     if (!res.ok) {
@@ -338,12 +351,6 @@ function App() {
               >
                 <Plus className="w-4 h-4" /> Gửi ảnh của bạn
               </motion.button>
-              <button
-                onClick={() => setIsBackdropViewerOpen(true)}
-                className="text-[11px] font-semibold text-brand-textSecondary hover:text-brand-textPrimary border border-brand-border hover:border-brand-secondary/50 px-3.5 py-2.5 rounded-md transition-colors bg-brand-card"
-              >
-                Xem bản bông in
-              </button>
               <button
                 onClick={() => setIsStageModeOpen(true)}
                 className="text-[11px] font-semibold text-amber-500 hover:text-amber-400 border border-amber-500/40 hover:border-amber-400 px-3.5 py-2.5 rounded-md transition-colors bg-brand-card flex items-center gap-1.5"
@@ -639,6 +646,7 @@ function App() {
         podcasts={podcasts}
         onApprove={handleApprovePost}
         onGeneratePodcast={handleGeneratePodcast}
+        onUploadPodcast={handleUploadPodcast}
         onDeletePodcast={handleDeletePodcast}
         onOpenBackdropViewer={() => setIsBackdropViewerOpen(true)}
       />
