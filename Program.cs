@@ -95,6 +95,9 @@ builder.Services.AddSingleton<LandingPageEvent.Services.Backdrop.IBackdropJobQue
                               LandingPageEvent.Services.Backdrop.BackdropJobQueue>();
 builder.Services.AddHostedService<LandingPageEvent.Services.Backdrop.BackdropJobWorker>();
 
+builder.Services.AddSingleton<LandingPageEvent.Services.Storage.IStorageService, 
+                              LandingPageEvent.Services.Storage.CloudflareR2StorageService>();
+
 builder.Services.AddScoped<IPostService, PostService>();
 builder.Services.AddScoped<IPodcastService, PodcastService>();
 builder.Services.AddSingleton<IUploadQueue, UploadQueue>();

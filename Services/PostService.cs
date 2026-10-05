@@ -23,6 +23,7 @@ public sealed class PostService : IPostService
     private readonly AppDbContext _context;
     private readonly IImagePolicy _imagePolicy;
     private readonly IMemoryCache _cache;
+    private readonly Storage.IStorageService? _storageService;
     private readonly string _webRootPath;
 
     // Cache Keys & Synchronization cho chịu tải cao
@@ -48,11 +49,13 @@ public sealed class PostService : IPostService
         AppDbContext context,
         IImagePolicy imagePolicy,
         IMemoryCache? cache = null,
-        IConfiguration? configuration = null)
+        IConfiguration? configuration = null,
+        Storage.IStorageService? storageService = null)
     {
         _context = context;
         _imagePolicy = imagePolicy;
         _cache = cache ?? new MemoryCache(new MemoryCacheOptions());
+        _storageService = storageService;
         // Thư mục lưu trữ tĩnh trong dự án
         _webRootPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
         EnsureDirectoriesExist();
@@ -324,25 +327,59 @@ public sealed class PostService : IPostService
     {
         var fileExtension = Path.GetExtension(fileName).ToLower();
         var uniqueFileName = $"{Guid.NewGuid()}{fileExtension}";
+        var contentType = fileExtension switch
+        {
+            ".png" => "image/png",
+            ".webp" => "image/webp",
+            _ => "image/jpeg"
+        };
 
-        var originalPath = Path.Combine(_webRootPath, "uploads", "original", uniqueFileName);
-        var thumbnailPath = Path.Combine(_webRootPath, "uploads", "thumbnail", uniqueFileName);
+        string originalUrl;
+        string thumbnailUrl;
 
         // 1. Lưu file ảnh gốc
-        using (var fileStream = new FileStream(originalPath, FileMode.Create))
+        if (_storageService != null)
         {
-            await imageStream.CopyToAsync(fileStream, ct);
+            originalUrl = await _storageService.SaveFileAsync(imageStream, $"uploads/original/{uniqueFileName}", contentType, ct);
+        }
+        else
+        {
+            var originalPath = Path.Combine(_webRootPath, "uploads", "original", uniqueFileName);
+            using (var fileStream = new FileStream(originalPath, FileMode.Create))
+            {
+                await imageStream.CopyToAsync(fileStream, ct);
+            }
+            originalUrl = $"/uploads/original/{uniqueFileName}";
         }
 
         // 2. Tạo ảnh thumbnail nén (Crop vuông 300x300 để xếp lưới cho đẹp)
-        using (var image = await Image.LoadAsync(originalPath, ct))
+        var thumbnailMemoryStream = new MemoryStream();
+        var localOriginalPath = Path.Combine(_webRootPath, "uploads", "original", uniqueFileName);
+        using (var image = File.Exists(localOriginalPath)
+            ? await Image.LoadAsync(_imagePolicy.Configuration, localOriginalPath, ct)
+            : await Image.LoadAsync(_imagePolicy.Configuration, imageStream, ct))
         {
             image.Mutate(x => x.Resize(new ResizeOptions
             {
                 Size = new Size(300, 300),
                 Mode = ResizeMode.Crop
             }));
-            await image.SaveAsync(thumbnailPath, ct);
+            await image.SaveAsJpegAsync(thumbnailMemoryStream, ct);
+        }
+        thumbnailMemoryStream.Position = 0;
+
+        if (_storageService != null)
+        {
+            thumbnailUrl = await _storageService.SaveFileAsync(thumbnailMemoryStream, $"uploads/thumbnail/{uniqueFileName}", "image/jpeg", ct);
+        }
+        else
+        {
+            var thumbnailPath = Path.Combine(_webRootPath, "uploads", "thumbnail", uniqueFileName);
+            using (var fileStream = new FileStream(thumbnailPath, FileMode.Create))
+            {
+                await thumbnailMemoryStream.CopyToAsync(fileStream, ct);
+            }
+            thumbnailUrl = $"/uploads/thumbnail/{uniqueFileName}";
         }
 
         // 3. Lưu vào Database (Mặc định IsApproved = false để kiểm duyệt trước)
@@ -350,8 +387,8 @@ public sealed class PostService : IPostService
         {
             Message = request.Message,
             Department = request.Department,
-            OriginalImagePath = $"/uploads/original/{uniqueFileName}",
-            ThumbnailImagePath = $"/uploads/thumbnail/{uniqueFileName}",
+            OriginalImagePath = originalUrl,
+            ThumbnailImagePath = thumbnailUrl,
             VoteCount = 0,
             IsApproved = false,
             IsPinned = false,
@@ -495,39 +532,73 @@ public sealed class PostService : IPostService
     {
         var fileExtension = Path.GetExtension(item.OriginalFileName).ToLower();
         var uniqueFileName = $"{Guid.NewGuid()}{fileExtension}";
-
-        var originalPath = Path.Combine(_webRootPath, "uploads", "original", uniqueFileName);
-        var thumbnailPath = Path.Combine(_webRootPath, "uploads", "thumbnail", uniqueFileName);
-
-        // 1. Di chuyển file từ thư mục tạm sang thư mục ảnh gốc
-        if (File.Exists(item.TempFilePath))
+        var contentType = fileExtension switch
         {
-            File.Move(item.TempFilePath, originalPath);
-        }
-        else
+            ".png" => "image/png",
+            ".webp" => "image/webp",
+            _ => "image/jpeg"
+        };
+
+        if (!File.Exists(item.TempFilePath))
         {
             return; // File không tồn tại
         }
 
+        string originalUrl;
+        string thumbnailUrl;
+
+        // 1. Lưu file ảnh gốc
+        if (_storageService != null)
+        {
+            using (var tempStream = File.OpenRead(item.TempFilePath))
+            {
+                originalUrl = await _storageService.SaveFileAsync(tempStream, $"uploads/original/{uniqueFileName}", contentType, ct);
+            }
+        }
+        else
+        {
+            var originalPath = Path.Combine(_webRootPath, "uploads", "original", uniqueFileName);
+            File.Move(item.TempFilePath, originalPath);
+            originalUrl = $"/uploads/original/{uniqueFileName}";
+        }
+
         // 2. Tạo ảnh thumbnail nén (Crop vuông 300x300 để xếp lưới).
-        //    Dùng cấu hình chỉ có bộ giải mã JPEG/PNG/WebP — file giả định dạng
-        //    sẽ hỏng ở đây thay vì chạm tới bộ giải mã khác.
         try
         {
-            using var image = await Image.LoadAsync(_imagePolicy.Configuration, originalPath, ct);
-            image.Mutate(x => x.Resize(new ResizeOptions
+            var localOriginalPath = Path.Combine(_webRootPath, "uploads", "original", uniqueFileName);
+            var sourcePath = File.Exists(localOriginalPath) ? localOriginalPath : item.TempFilePath;
+            var thumbnailStream = new MemoryStream();
+            using (var image = await Image.LoadAsync(_imagePolicy.Configuration, sourcePath, ct))
             {
-                Size = new Size(300, 300),
-                Mode = ResizeMode.Crop
-            }));
-            await image.SaveAsync(thumbnailPath, ct);
+                image.Mutate(x => x.Resize(new ResizeOptions
+                {
+                    Size = new Size(300, 300),
+                    Mode = ResizeMode.Crop
+                }));
+                await image.SaveAsJpegAsync(thumbnailStream, ct);
+            }
+            thumbnailStream.Position = 0;
+
+            if (_storageService != null)
+            {
+                thumbnailUrl = await _storageService.SaveFileAsync(thumbnailStream, $"uploads/thumbnail/{uniqueFileName}", "image/jpeg", ct);
+            }
+            else
+            {
+                var thumbnailPath = Path.Combine(_webRootPath, "uploads", "thumbnail", uniqueFileName);
+                using var fileStream = new FileStream(thumbnailPath, FileMode.Create);
+                await thumbnailStream.CopyToAsync(fileStream, ct);
+                thumbnailUrl = $"/uploads/thumbnail/{uniqueFileName}";
+            }
         }
         catch (Exception) when (!ct.IsCancellationRequested)
         {
-            // Không để lại file mồ côi trong uploads/original khi ảnh không giải mã được.
-            TryDelete(originalPath);
-            TryDelete(thumbnailPath);
+            TryDelete(item.TempFilePath);
             return;
+        }
+        finally
+        {
+            TryDelete(item.TempFilePath);
         }
 
         // 3. Lưu vào Database (IsApproved = false chờ BTC duyệt)
@@ -535,8 +606,8 @@ public sealed class PostService : IPostService
         {
             Message = item.Message,
             Department = item.Department,
-            OriginalImagePath = $"/uploads/original/{uniqueFileName}",
-            ThumbnailImagePath = $"/uploads/thumbnail/{uniqueFileName}",
+            OriginalImagePath = originalUrl,
+            ThumbnailImagePath = thumbnailUrl,
             VoteCount = 0,
             IsApproved = false,
             IsPinned = false,

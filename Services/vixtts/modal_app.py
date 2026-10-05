@@ -14,7 +14,7 @@ from pydantic import BaseModel
 app = modal.App("landingpage-vixtts")
 tts_volume = modal.Volume.from_name("vixtts-cache", create_if_missing=True)
 
-# Khóa API bí mật bảo vệ endpoint (ngăn người ngoài gọi trộm GPU)
+# Khóa API bí mật bảo vệ endpoint
 SECRET_API_KEY = os.environ.get("VIXTTS_API_KEY", "iris-event-2026-secret-tts-key")
 
 # 2. Hàm hỗ trợ chuẩn hóa tiếng Việt thuần (đọc số "15" -> "mười lăm", "%" -> "phần trăm")
@@ -92,8 +92,7 @@ def normalize_vietnamese_text(text: str) -> str:
     text = re.sub(r'\s+', ' ', text).strip()
     return text
 
-# 3. Định nghĩa môi trường container chạy GPU CUDA 12.1
-# KHÔNG chạy code nạp model lúc build CPU để tránh 100% lỗi OSError: libcudart.so
+# 3. Định nghĩa môi trường container chạy GPU CUDA 12.1 kèm đóng gói thư mục voices chuẩn xịn
 vixtts_image = (
     modal.Image.debian_slim(python_version="3.10")
     .env({"COQUI_TOS_AGREED": "1"})
@@ -107,61 +106,98 @@ vixtts_image = (
     .pip_install(
         "transformers==4.33.2",
         "tokenizers==0.13.3",
+        "huggingface_hub",
         "TTS==0.22.0",
         "fastapi[standard]",
         "pydantic"
     )
+    # Upload thư mục voices chuẩn chất lượng cao lên container
+    .add_local_dir("voices", "/root/voices")
 )
 
-# 4. Request Model DTO
+# 4. Request Model DTO đồng bộ 100% với app.py
 class TTSRequest(BaseModel):
     text: str
     speaker_wav: str = "voices/default_vietnamese.wav"
     language: str = "vi"
     speed: float = 1.08
+    split_sentences: bool = False
     temperature: float = 0.72
 
-# 5. Service ViXTTS chạy trên GPU NVIDIA T4 gắn kèm Volume lưu cache model
+# 5. Service ViXTTS chạy trên GPU NVIDIA T4
 @app.cls(
     image=vixtts_image,
-    gpu="T4",                         # Cấp GPU T4 (16GB VRAM)
-    timeout=180,                      # Timeout tối đa 3 phút
-    scaledown_window=120,             # Giữ GPU ấm 2 phút sau khi gọi
-    volumes={"/root/.local/share/tts": tts_volume} # Gắn volume lưu trọng số model vĩnh viễn
+    gpu="T4",
+    timeout=180,
+    scaledown_window=120,
+    volumes={"/root/.local/share/tts": tts_volume}
 )
 class ViXttsService:
     @modal.enter()
     def load_model(self):
-        """Khởi động mô hình vào VRAM một lần duy nhất khi container GPU bật lên"""
+        """Tải và nạp checkpoint viXTTS tiếng Việt chuẩn từ Hugging Face capleaf/viXTTS"""
         import os
         import torch
         from TTS.api import TTS
+        from huggingface_hub import snapshot_download
+
         os.environ["COQUI_TOS_AGREED"] = "1"
         print(f"CUDA Available: {torch.cuda.is_available()} - GPU: {torch.cuda.get_device_name(0)}")
-        
-        # Nạp model (sẽ tự động tải vào /root/.local/share/tts nếu là lần đầu tiên, các lần sau có sẵn)
+
+        model_dir = "/root/.local/share/tts/vixtts"
+        config_path = os.path.join(model_dir, "config.json")
+        model_path = os.path.join(model_dir, "model.pth")
+
+        # Tải checkpoint tiếng Việt viXTTS nếu chưa có trong Volume
+        if not os.path.exists(config_path) or not os.path.exists(model_path):
+            print("Chưa có checkpoint viXTTS tiếng Việt. Đang tải từ Hugging Face (capleaf/viXTTS)...")
+            snapshot_download(
+                repo_id="capleaf/viXTTS",
+                local_dir=model_dir,
+                allow_patterns=["config.json", "model.pth", "vocab.json", "*.wav"]
+            )
+            try:
+                tts_volume.commit()
+            except Exception:
+                pass
+            print("Tải viXTTS tiếng Việt thành công và đã lưu vào Volume!")
+
+        # Nạp mô hình tiếng Việt chuyên dụng bằng model_path
+        print(f"Đang nạp mô hình viXTTS từ {model_dir}...")
         self.tts = TTS(
-            model_name="tts_models/multilingual/multi-dataset/xtts_v2",
+            model_path=model_dir,
+            config_path=config_path,
             progress_bar=False,
             gpu=True
         )
 
-        # Lưu thay đổi vào volume đám mây của Modal
+        # Đảm bảo danh sách ngôn ngữ hỗ trợ bao gồm 'vi'
         try:
-            tts_volume.commit()
-        except Exception:
-            pass
+            tts_m = getattr(getattr(self.tts, "synthesizer", None), "tts_model", None)
+            if tts_m and hasattr(tts_m, "config") and hasattr(tts_m.config, "languages"):
+                if isinstance(tts_m.config.languages, list) and "vi" not in tts_m.config.languages:
+                    tts_m.config.languages.append("vi")
+        except Exception as e:
+            print("Language config adjustment note:", e)
 
-        # Tokenizer safeguard cho tiếng Việt
+        # Tokenizer safeguard: chuyển mã ngôn ngữ tokenization sang 'en' để chạy qua vocab.json tiếng Việt
         try:
             if hasattr(self.tts, "synthesizer") and hasattr(self.tts.synthesizer, "tts_model"):
                 tokenizer = getattr(self.tts.synthesizer.tts_model, "tokenizer", None)
                 if tokenizer and hasattr(tokenizer, "preprocess_text"):
                     orig_preprocess = tokenizer.preprocess_text
-                    tokenizer.preprocess_text = lambda txt, lang: orig_preprocess(txt, "en" if lang == "vi" else lang)
+                    def safe_preprocess_text(txt, lang):
+                        langs = getattr(tokenizer, "languages", [])
+                        if isinstance(langs, dict):
+                            langs = list(langs.keys())
+                        if not langs or lang not in langs:
+                            lang = "en"
+                        return orig_preprocess(txt, lang)
+                    tokenizer.preprocess_text = safe_preprocess_text
         except Exception as e:
             print("Safeguard warning:", e)
-        print("Đã nạp mô hình ViXTTS vào GPU VRAM thành công!")
+
+        print("Đã nạp thành công mô hình viXTTS tiếng Việt vào GPU VRAM!")
 
     @modal.asgi_app()
     def web_endpoint(self):
@@ -177,44 +213,49 @@ class ViXttsService:
 
         @web.get("/healthz")
         def health():
-            return {"status": "healthy", "gpu": "NVIDIA T4", "ready": True}
+            return {"status": "healthy", "gpu": "NVIDIA T4", "ready": True, "model": "viXTTS-Vietnamese"}
 
         @web.post("/api/tts")
         def generate(req: TTSRequest, x_api_key: str = Header(None, alias="X-API-Key")):
-            # Kiểm tra bảo mật: Nếu đã cấu hình API Key thì bắt buộc phải đúng
             if SECRET_API_KEY and x_api_key != SECRET_API_KEY:
                 raise HTTPException(status_code=401, detail="Unauthorized: Khóa API Key không hợp lệ.")
 
             if not req.text or not req.text.strip():
                 raise HTTPException(status_code=400, detail="Văn bản không được để trống")
             
-            # Chặn văn bản quá dài để không bị lạm dụng GPU
             if len(req.text) > 1000:
                 raise HTTPException(status_code=400, detail="Văn bản không được vượt quá 1000 ký tự")
             
             output_file = f"/tmp/tts_{uuid.uuid4().hex[:10]}.wav"
             try:
-                # Sử dụng default speaker nếu không có voice custom
-                default_voice = "/tmp/sample.wav"
-                if not os.path.exists(default_voice):
-                    import wave, math, struct
-                    with wave.open(default_voice, 'w') as wf:
-                        wf.setnchannels(1)
-                        wf.setsampwidth(2)
-                        wf.setframerate(22050)
-                        for i in range(22050 * 2):
-                            v = int(32767.0 * 0.05 * math.sin(2.0 * math.pi * 440.0 * i / 22050))
-                            wf.writeframes(struct.pack('<h', v))
+                # 1. Tìm file giọng mẫu chuẩn default_vietnamese.wav
+                speaker_wav_path = req.speaker_wav
+                if speaker_wav_path:
+                    # Nếu là đường dẫn tương đối (vd: voices/default_vietnamese.wav), kiểm tra tại /root
+                    if not os.path.isabs(speaker_wav_path):
+                        candidate = os.path.join("/root", speaker_wav_path)
+                        if os.path.exists(candidate):
+                            speaker_wav_path = candidate
 
-                # Chuẩn hóa chữ số và ký tự sang tiếng Việt
+                # Nếu vẫn không tìm thấy, dùng trực tiếp giọng chuẩn tại /root/voices/default_vietnamese.wav
+                if not speaker_wav_path or not os.path.exists(speaker_wav_path):
+                    root_voice = "/root/voices/default_vietnamese.wav"
+                    if os.path.exists(root_voice):
+                        speaker_wav_path = root_voice
+                    else:
+                        speaker_wav_path = "/root/.local/share/tts/vixtts/vi_sample.wav"
+
+                # 2. Chuẩn hóa chữ số và ký tự sang tiếng Việt
                 clean_text = normalize_vietnamese_text(req.text)
 
+                # 3. Đồng bộ 100% siêu tham số khử ngọng từ app.py
                 self.tts.tts_to_file(
                     text=clean_text,
-                    speaker_wav=default_voice,
+                    speaker_wav=speaker_wav_path,
                     language="vi",
                     file_path=output_file,
                     speed=req.speed,
+                    split_sentences=req.split_sentences,
                     temperature=req.temperature,
                     repetition_penalty=5.0,
                     top_k=50,

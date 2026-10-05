@@ -22,6 +22,7 @@ public sealed class PodcastService : IPodcastService
     private readonly IConfiguration _configuration;
     private readonly ILogger<PodcastService> _logger;
     private readonly IMemoryCache _cache;
+    private readonly Storage.IStorageService? _storageService;
     private readonly string _webRootPath;
 
     private const string PodcastsCacheKey = "PodcastService_Podcasts";
@@ -32,13 +33,15 @@ public sealed class PodcastService : IPodcastService
         IEnumerable<ITtsProvider> ttsProviders,
         IConfiguration configuration,
         ILogger<PodcastService> logger,
-        IMemoryCache? cache = null)
+        IMemoryCache? cache = null,
+        Storage.IStorageService? storageService = null)
     {
         _context = context;
         _ttsProviders = ttsProviders;
         _configuration = configuration;
         _logger = logger;
         _cache = cache ?? new MemoryCache(new MemoryCacheOptions());
+        _storageService = storageService;
         _webRootPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
     }
 
@@ -129,16 +132,26 @@ public sealed class PodcastService : IPodcastService
 
         // 3. Lưu tệp âm thanh vật lý
         var uniqueFileName = $"podcast-{postId}-{Guid.NewGuid().ToString()[..8]}.{fileExtension}";
-        var relativePath = $"/uploads/podcasts/{uniqueFileName}";
-        var absolutePath = Path.Combine(_webRootPath, "uploads", "podcasts", uniqueFileName);
+        var relativePath = $"uploads/podcasts/{uniqueFileName}";
+        var mimeType = fileExtension == "mp3" ? "audio/mpeg" : "audio/wav";
 
-        var uploadsDirectory = Path.GetDirectoryName(absolutePath);
-        if (!string.IsNullOrEmpty(uploadsDirectory) && !Directory.Exists(uploadsDirectory))
+        string audioPath;
+        if (_storageService != null)
         {
-            Directory.CreateDirectory(uploadsDirectory);
+            using var audioStream = new MemoryStream(audioBytes);
+            audioPath = await _storageService.SaveFileAsync(audioStream, relativePath, mimeType, ct);
         }
-
-        await File.WriteAllBytesAsync(absolutePath, audioBytes, ct);
+        else
+        {
+            var absolutePath = Path.Combine(_webRootPath, "uploads", "podcasts", uniqueFileName);
+            var uploadsDirectory = Path.GetDirectoryName(absolutePath);
+            if (!string.IsNullOrEmpty(uploadsDirectory) && !Directory.Exists(uploadsDirectory))
+            {
+                Directory.CreateDirectory(uploadsDirectory);
+            }
+            await File.WriteAllBytesAsync(absolutePath, audioBytes, ct);
+            audioPath = $"/{relativePath}";
+        }
 
         // 4. Ước lượng độ dài âm thanh
         int wordCount = post.Message.Split(new[] { ' ', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).Length;
@@ -177,18 +190,25 @@ public sealed class PodcastService : IPodcastService
             return false;
         }
 
-        if (!string.IsNullOrWhiteSpace(episode.AudioPath) && episode.AudioPath.StartsWith("/uploads/", StringComparison.OrdinalIgnoreCase))
+        if (!string.IsNullOrWhiteSpace(episode.AudioPath))
         {
-            var absolutePath = Path.Combine(_webRootPath, episode.AudioPath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
-            if (File.Exists(absolutePath))
+            if (_storageService != null)
             {
-                try
+                await _storageService.DeleteFileAsync(episode.AudioPath, ct);
+            }
+            else if (episode.AudioPath.StartsWith("/uploads/", StringComparison.OrdinalIgnoreCase))
+            {
+                var absolutePath = Path.Combine(_webRootPath, episode.AudioPath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
+                if (File.Exists(absolutePath))
                 {
-                    File.Delete(absolutePath);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Không thể xóa file audio tại đường dẫn {AbsolutePath}", absolutePath);
+                    try
+                    {
+                        File.Delete(absolutePath);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Không thể xóa file audio tại đường dẫn {AbsolutePath}", absolutePath);
+                    }
                 }
             }
         }
@@ -238,20 +258,30 @@ public sealed class PodcastService : IPodcastService
             }
         }
 
-        var podcastDir = Path.Combine(_webRootPath, "uploads", "podcasts");
-        if (!Directory.Exists(podcastDir))
-        {
-            Directory.CreateDirectory(podcastDir);
-        }
-
         var postPrefix = postId.HasValue ? postId.Value.ToString() : "custom";
         var uniqueFileName = $"podcast-upload-{postPrefix}-{Guid.NewGuid().ToString()[..8]}{ext}";
-        var relativePath = $"/uploads/podcasts/{uniqueFileName}";
-        var absolutePath = Path.Combine(podcastDir, uniqueFileName);
+        var relativePath = $"uploads/podcasts/{uniqueFileName}";
+        var mimeType = ext == ".mp3" ? "audio/mpeg" : "audio/wav";
 
-        await using (var fileStream = new FileStream(absolutePath, FileMode.Create))
+        string audioUrl;
+        if (_storageService != null)
         {
-            await audioFile.CopyToAsync(fileStream, ct);
+            await using var uploadStream = audioFile.OpenReadStream();
+            audioUrl = await _storageService.SaveFileAsync(uploadStream, relativePath, mimeType, ct);
+        }
+        else
+        {
+            var podcastDir = Path.Combine(_webRootPath, "uploads", "podcasts");
+            if (!Directory.Exists(podcastDir))
+            {
+                Directory.CreateDirectory(podcastDir);
+            }
+            var absolutePath = Path.Combine(podcastDir, uniqueFileName);
+            await using (var fileStream = new FileStream(absolutePath, FileMode.Create))
+            {
+                await audioFile.CopyToAsync(fileStream, ct);
+            }
+            audioUrl = $"/{relativePath}";
         }
 
         int duration = durationSeconds.GetValueOrDefault();
