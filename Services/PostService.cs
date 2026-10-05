@@ -354,6 +354,7 @@ public sealed class PostService : IPostService
             ThumbnailImagePath = $"/uploads/thumbnail/{uniqueFileName}",
             VoteCount = 0,
             IsApproved = false,
+            IsPinned = false,
             CreatedAt = DateTimeOffset.UtcNow
         };
 
@@ -366,7 +367,8 @@ public sealed class PostService : IPostService
             post.Department,
             post.ThumbnailImagePath,
             post.VoteCount,
-            post.CreatedAt);
+            post.CreatedAt,
+            post.IsPinned);
     }
 
     public async Task<IReadOnlyList<PostResponse>> GetApprovedPostsAsync(CancellationToken ct)
@@ -390,7 +392,8 @@ public sealed class PostService : IPostService
                 .ToListAsync(ct);
 
             cached = posts
-                .OrderByDescending(p => p.VoteCount)
+                .OrderByDescending(p => p.IsPinned)
+                .ThenByDescending(p => p.VoteCount)
                 .ThenByDescending(p => p.CreatedAt)
                 .Select(p => new PostResponse(
                     p.Id,
@@ -398,7 +401,8 @@ public sealed class PostService : IPostService
                     p.Department,
                     p.ThumbnailImagePath,
                     p.VoteCount,
-                    p.CreatedAt))
+                    p.CreatedAt,
+                    p.IsPinned))
                 .ToList();
 
             _cache.Set(ApprovedPostsKey, cached, TimeSpan.FromSeconds(10));
@@ -466,12 +470,24 @@ public sealed class PostService : IPostService
         {
             var updated = currentList
                 .Select(p => p.Id == id ? p with { VoteCount = post.VoteCount } : p)
-                .OrderByDescending(p => p.VoteCount)
+                .OrderByDescending(p => p.IsPinned)
+                .ThenByDescending(p => p.VoteCount)
                 .ThenByDescending(p => p.CreatedAt)
                 .ToList();
             _cache.Set(ApprovedPostsKey, updated, TimeSpan.FromSeconds(10));
         }
 
+        return true;
+    }
+
+    public async Task<bool> TogglePinPostAsync(int id, bool? isPinned, CancellationToken ct)
+    {
+        var post = await _context.MemoryPosts.FindAsync(new object[] { id }, ct);
+        if (post == null || !post.IsApproved) return false;
+
+        post.IsPinned = isPinned ?? !post.IsPinned;
+        await _context.SaveChangesAsync(ct);
+        InvalidateApprovedCaches();
         return true;
     }
 
@@ -523,6 +539,7 @@ public sealed class PostService : IPostService
             ThumbnailImagePath = $"/uploads/thumbnail/{uniqueFileName}",
             VoteCount = 0,
             IsApproved = false,
+            IsPinned = false,
             CreatedAt = DateTimeOffset.UtcNow
         };
 

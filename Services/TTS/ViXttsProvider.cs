@@ -58,7 +58,17 @@ public sealed class ViXttsProvider : ITtsProvider
             Encoding.UTF8,
             "application/json");
 
-        using var response = await client.PostAsync(endpoint, jsonContent, ct);
+        var apiKey = _configuration["TtsSettings:ViXtts:ApiKey"] ?? "iris-event-2026-secret-tts-key";
+        using var requestMessage = new HttpRequestMessage(HttpMethod.Post, endpoint)
+        {
+            Content = jsonContent
+        };
+        if (!string.IsNullOrWhiteSpace(apiKey))
+        {
+            requestMessage.Headers.Add("X-API-Key", apiKey);
+        }
+
+        using var response = await client.SendAsync(requestMessage, ct);
         if (!response.IsSuccessStatusCode)
         {
             var errorBody = await response.Content.ReadAsStringAsync(ct);

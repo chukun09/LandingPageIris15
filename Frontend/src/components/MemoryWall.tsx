@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Search, Heart, Filter, ArrowUpDown, Calendar, ChevronLeft, ChevronRight, Sparkles, Download, MapPin } from 'lucide-react';
+import { Search, Heart, Filter, Calendar, ChevronLeft, ChevronRight, Sparkles, Download, MapPin, Pin, Flame, Clock } from 'lucide-react';
 import { staggerContainer, fadeUp, sectionViewport } from '../lib/motion';
 import { fireCelebration } from './CelebrationConfetti';
 
@@ -12,6 +12,7 @@ interface Post {
   thumbnailUrl?: string;
   voteCount: number;
   createdAt: string;
+  isPinned?: boolean;
 }
 
 interface MemoryWallProps {
@@ -56,6 +57,8 @@ export const MemoryWall: React.FC<MemoryWallProps> = ({
     return ['All', ...Array.from(list)];
   }, [posts]);
 
+  const pinnedCount = useMemo(() => posts.filter(p => p.isPinned).length, [posts]);
+
   const filteredAndSortedPosts = useMemo(() => {
     let result = [...posts];
     if (search.trim()) {
@@ -69,6 +72,14 @@ export const MemoryWall: React.FC<MemoryWallProps> = ({
       result = result.filter(p => p.department === deptFilter);
     }
     result.sort((a, b) => {
+      // 1. Luôn ưu tiên bài ghim (Pinned Posts) lên đầu danh sách
+      const aPin = a.isPinned ? 1 : 0;
+      const bPin = b.isPinned ? 1 : 0;
+      if (bPin !== aPin) {
+        return bPin - aPin;
+      }
+
+      // 2. Tiếp theo sắp xếp theo tiêu chí được chọn
       if (sortBy === 'votes') {
         if (b.voteCount !== a.voteCount) return b.voteCount - a.voteCount;
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
@@ -101,8 +112,8 @@ export const MemoryWall: React.FC<MemoryWallProps> = ({
 
   return (
     <div className="w-full">
-      {/* Filters Bar */}
-      <div className="glass-card p-5 mb-8 flex flex-col md:flex-row md:items-center gap-4 justify-between">
+      {/* Filters & Redesigned Segmented Sort Bar */}
+      <div className="glass-card p-5 mb-8 flex flex-col lg:flex-row lg:items-center gap-4 justify-between">
         <div className="relative flex-1 max-w-md">
           <Search className="w-4 h-4 text-brand-textMuted absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
@@ -115,6 +126,7 @@ export const MemoryWall: React.FC<MemoryWallProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          {/* Department Filter */}
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-brand-textMuted" />
             <select
@@ -130,14 +142,42 @@ export const MemoryWall: React.FC<MemoryWallProps> = ({
             </select>
           </div>
 
-          <div className="flex items-center gap-2">
-            <ArrowUpDown className="w-4 h-4 text-brand-textMuted" />
+          {/* Segmented Sort Control */}
+          <div className="flex items-center p-1 bg-brand-surface border border-brand-border rounded-xl">
             <button
-              onClick={() => setSortBy(sortBy === 'votes' ? 'date' : 'votes')}
-              className="bg-brand-surface border border-brand-border hover:border-brand-primary hover:text-brand-textPrimary rounded-xl px-3 py-2 text-xs font-semibold flex items-center gap-1.5 text-brand-textSecondary transition-all"
+              type="button"
+              onClick={() => setSortBy('votes')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                sortBy === 'votes'
+                  ? 'bg-amber-500 text-white shadow-sm'
+                  : 'text-brand-textSecondary hover:text-brand-textPrimary'
+              }`}
             >
-              {sortBy === 'votes' ? 'Thả tim nhiều nhất' : 'Mới nhất trước'}
+              <Flame className="w-3.5 h-3.5" />
+              Nhiều tim nhất
             </button>
+            <button
+              type="button"
+              onClick={() => setSortBy('date')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                sortBy === 'date'
+                  ? 'bg-brand-primary text-white shadow-sm'
+                  : 'text-brand-textSecondary hover:text-brand-textPrimary'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5" />
+              Mới nhất
+            </button>
+          </div>
+
+          {/* Count and Pin Status */}
+          <div className="hidden sm:flex items-center gap-2 pl-1 text-[11px] text-brand-textMuted font-medium">
+            <span>{filteredAndSortedPosts.length} kỷ niệm</span>
+            {pinnedCount > 0 && (
+              <span className="flex items-center gap-1 text-amber-500 font-bold bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                <Pin className="w-3 h-3 fill-current" /> {pinnedCount} đã ghim
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -164,11 +204,20 @@ export const MemoryWall: React.FC<MemoryWallProps> = ({
                   key={post.id}
                   layout
                   variants={fadeUp}
-                  className="card-premium card-polaroid flex flex-col justify-between overflow-hidden group cursor-pointer border border-brand-border hover:border-brand-secondary/50 rounded-2xl bg-brand-card shadow-sm"
+                  className={`card-premium card-polaroid flex flex-col justify-between overflow-hidden group cursor-pointer border rounded-2xl bg-brand-card shadow-sm transition-all duration-300 ${
+                    post.isPinned
+                      ? 'border-amber-500/70 shadow-[0_0_18px_rgba(245,158,11,0.18)] ring-1 ring-amber-500/40 hover:border-amber-400'
+                      : 'border-brand-border hover:border-brand-secondary/50'
+                  }`}
                   onClick={() => onCardClick(post)}
                 >
                   {/* Photo */}
                   <div className="relative aspect-video w-full overflow-hidden bg-brand-surface border-b border-brand-border/60">
+                    {post.isPinned && (
+                      <div className="absolute top-2.5 left-2.5 z-20 flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500 text-white text-[10px] font-black shadow-lg backdrop-blur-md border border-amber-300/50 uppercase tracking-wider">
+                        <Pin className="w-3 h-3 fill-current" /> ĐÃ GHIM
+                      </div>
+                    )}
                     <img
                       src={post.thumbnailUrl || post.thumbnailImagePath}
                       alt="Memory thumbnail"

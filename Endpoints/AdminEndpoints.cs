@@ -49,6 +49,24 @@ public static class AdminEndpoints
         .WithSummary("Duyệt hoặc từ chối bài viết")
         .WithDescription("Nếu duyệt = true, bài viết xuất hiện trên Mosaic. Nếu duyệt = false, xóa bài viết khỏi CSDL và file vật lý.");
 
+        // 2b. Ghim hoặc bỏ ghim bài viết lên đầu
+        group.MapPost("/posts/{id:int}/pin", async Task<Results<Ok<string>, NotFound>> (
+            int id,
+            [FromBody] PinPostRequest? request,
+            IPostService postService,
+            CancellationToken ct) =>
+        {
+            var success = await postService.TogglePinPostAsync(id, request?.IsPinned, ct);
+            if (!success)
+            {
+                return TypedResults.NotFound();
+            }
+            return TypedResults.Ok($"Cập nhật trạng thái ghim cho bài viết ID {id} thành công.");
+        })
+        .WithName("TogglePinPost")
+        .WithSummary("Ghim hoặc bỏ ghim bài viết lên đầu")
+        .WithDescription("Ghim bài viết để luôn ưu tiên hiển thị ở đầu danh sách ký ức.");
+
         // 3. Chuyển đổi bài viết đã duyệt thành Podcast AI
         group.MapPost("/posts/{id:int}/podcast", async Task<Results<Ok<PodcastResponse>, BadRequest<string>, NotFound>> (
             int id,
@@ -168,3 +186,8 @@ public sealed record GeneratePodcastRequest(
     string Title,
     string? ApiKey,
     string? Region);
+
+/// <summary>
+/// Yêu cầu ghim hoặc bỏ ghim bài viết.
+/// </summary>
+public sealed record PinPostRequest(bool? IsPinned);

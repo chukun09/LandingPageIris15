@@ -23,6 +23,7 @@ public class AppDbContext : DbContext
             entity.Property(e => e.Department).HasMaxLength(100);
             entity.Property(e => e.OriginalImagePath).IsRequired().HasMaxLength(500);
             entity.Property(e => e.ThumbnailImagePath).IsRequired().HasMaxLength(500);
+            entity.Property(e => e.IsPinned).HasDefaultValue(false);
         });
 
         modelBuilder.Entity<PodcastEpisode>(entity =>

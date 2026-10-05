@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { X, Check, Trash2, Image, Settings, Sparkles, Download, Radio } from 'lucide-react';
+import { X, Check, Trash2, Image, Settings, Sparkles, Download, Radio, Pin, PinOff, Search } from 'lucide-react';
 import { ModalShell } from './ModalShell';
 import { PodcastStudioTab } from './PodcastStudioTab';
 
@@ -12,6 +12,7 @@ interface PendingPost {
   thumbnailUrl?: string;
   voteCount: number;
   createdAt: string;
+  isPinned?: boolean;
 }
 
 interface Podcast {
@@ -30,6 +31,7 @@ interface AdminPanelProps {
   approvedPosts: PendingPost[];
   podcasts: Podcast[];
   onApprove: (id: number, approve: boolean) => Promise<void>;
+  onTogglePin?: (id: number, isPinned?: boolean) => Promise<void>;
   onGeneratePodcast: (id: number, title: string, apiKey: string, region: string) => Promise<void>;
   onUploadPodcast: (formData: FormData) => Promise<void>;
   onDeletePodcast: (id: number) => Promise<void>;
@@ -43,15 +45,30 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   approvedPosts,
   podcasts,
   onApprove,
+  onTogglePin,
   onGeneratePodcast,
   onUploadPodcast,
   onDeletePodcast,
   onOpenBackdropViewer,
 }) => {
-  const [activeTab, setActiveTab] = useState<'pending' | 'podcast_studio' | 'podcast_list' | 'podcast_config' | 'backdrop'>('pending');
+  const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'podcast_studio' | 'podcast_list' | 'podcast_config' | 'backdrop'>('pending');
   const [ttsApiKey, setTtsApiKey] = useState(() => localStorage.getItem('tts_api_key') || '');
   const [ttsRegion, setTtsRegion] = useState(() => localStorage.getItem('tts_region') || 'eastasia');
   const [loadingPosts, setLoadingPosts] = useState<Record<number, boolean>>({});
+  const [pinningPostId, setPinningPostId] = useState<number | null>(null);
+  const [approvedSearch, setApprovedSearch] = useState('');
+
+  const handleTogglePinAction = async (id: number, currentPinned: boolean) => {
+    if (!onTogglePin) return;
+    setPinningPostId(id);
+    try {
+      await onTogglePin(id, !currentPinned);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Thao tác ghim bài thất bại.');
+    } finally {
+      setPinningPostId(null);
+    }
+  };
 
   const handleDownload = async (audioUrl: string, title: string) => {
     try {
@@ -105,6 +122,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const tabs = [
     { id: 'pending' as const, label: `Bài chờ duyệt (${pendingPosts.length})` },
+    { id: 'approved' as const, label: `Bài đã duyệt (${approvedPosts.length}) 📌` },
     { id: 'podcast_studio' as const, label: 'Podcast AI Studio 🎙️' },
     { id: 'podcast_list' as const, label: `Danh sách Radio (${podcasts.length})` },
     { id: 'podcast_config' as const, label: 'Cấu hình TTS' },
@@ -226,6 +244,112 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     </table>
                   </div>
                 )
+              )}
+
+              {/* Tab 1b: Approved Posts (View & Manage Pins) */}
+              {activeTab === 'approved' && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="relative flex-1 max-w-sm">
+                      <Search className="w-4 h-4 text-brand-textMuted absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        placeholder="Tìm bài đã duyệt theo nội dung, phòng ban..."
+                        value={approvedSearch}
+                        onChange={(e) => setApprovedSearch(e.target.value)}
+                        className="input-themed w-full pl-9 pr-4 py-2 text-xs"
+                      />
+                    </div>
+                    <div className="text-xs text-brand-textSecondary font-medium">
+                      Tổng số: <strong className="text-brand-textPrimary">{approvedPosts.length}</strong> bài • Đang ghim: <strong className="text-amber-500">{approvedPosts.filter(p => p.isPinned).length}</strong> bài
+                    </div>
+                  </div>
+
+                  {approvedPosts.length === 0 ? (
+                    <div className="text-center py-20 bg-brand-surface/50 rounded-2xl border border-brand-border space-y-3">
+                      <Sparkles className="w-12 h-12 text-brand-textMuted mx-auto" />
+                      <p className="text-brand-textSecondary text-sm font-semibold">Chưa có bài viết nào được duyệt.</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto border border-brand-border rounded-2xl bg-brand-card">
+                      <table className="w-full border-collapse text-left text-xs text-brand-textSecondary">
+                        <thead>
+                          <tr className="bg-brand-surface border-b border-brand-border font-bold text-brand-textPrimary">
+                            <th className="p-4">Hình ảnh</th>
+                            <th className="p-4">Lời chúc / Kỷ niệm</th>
+                            <th className="p-4">Phòng ban</th>
+                            <th className="p-4 text-center">Lượt tim</th>
+                            <th className="p-4 text-center">Trạng thái</th>
+                            <th className="p-4 text-center">Thao tác</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {approvedPosts
+                            .filter(p =>
+                              !approvedSearch ||
+                              p.message.toLowerCase().includes(approvedSearch.toLowerCase()) ||
+                              (p.department && p.department.toLowerCase().includes(approvedSearch.toLowerCase()))
+                            )
+                            .map((post) => (
+                              <tr key={post.id} className="border-b border-brand-border/60 hover:bg-brand-surface/50 transition-colors">
+                                <td className="p-4">
+                                  <img
+                                    src={post.thumbnailUrl || post.thumbnailImagePath}
+                                    alt="thumb"
+                                    className="w-12 h-12 object-cover rounded-lg border border-brand-border"
+                                    onError={(e) => {
+                                      e.currentTarget.style.display = 'none';
+                                    }}
+                                  />
+                                </td>
+                                <td className="p-4 max-w-sm whitespace-pre-line leading-relaxed font-normal text-brand-textPrimary">
+                                  {post.message}
+                                </td>
+                                <td className="p-4 font-bold text-brand-textPrimary">{post.department || 'Ẩn danh'}</td>
+                                <td className="p-4 text-center font-fira font-bold text-brand-secondary">
+                                  {post.voteCount}
+                                </td>
+                                <td className="p-4 text-center">
+                                  {post.isPinned ? (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                                      <Pin className="w-3 h-3 fill-current" /> ĐÃ GHIM
+                                    </span>
+                                  ) : (
+                                    <span className="text-[11px] text-brand-textMuted">Thường</span>
+                                  )}
+                                </td>
+                                <td className="p-4">
+                                  <div className="flex justify-center items-center gap-2">
+                                    <button
+                                      onClick={() => handleTogglePinAction(post.id, !!post.isPinned)}
+                                      disabled={pinningPostId === post.id}
+                                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                                        post.isPinned
+                                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30'
+                                          : 'bg-brand-surface border border-brand-border text-brand-textSecondary hover:border-amber-500/60 hover:text-amber-400'
+                                      }`}
+                                      title={post.isPinned ? 'Bỏ ghim khỏi đầu trang' : 'Ghim bài viết lên đầu trang'}
+                                    >
+                                      {post.isPinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
+                                      {post.isPinned ? 'Gỡ ghim' : 'Ghim bài'}
+                                    </button>
+                                    <button
+                                      onClick={() => handleApproveAction(post.id, false)}
+                                      disabled={loadingPosts[post.id]}
+                                      className="p-1.5 bg-brand-danger/10 hover:bg-brand-danger hover:text-white border border-brand-danger/25 text-brand-danger rounded-lg transition-all"
+                                      title="Gỡ duyệt & Xóa bài viết"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
               )}
 
               {/* Tab 2: Podcast Studio (Dedicated AI Generator & Manual Upload) */}

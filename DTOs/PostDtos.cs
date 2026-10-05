@@ -31,7 +31,8 @@ public sealed record PostResponse(
     string? Department,
     string ThumbnailUrl,
     int VoteCount,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    bool IsPinned = false);
 
 /// <summary>
 /// Phản hồi thông tin tập Podcast AI.

@@ -10,6 +10,7 @@ interface Post {
   thumbnailUrl?: string;
   voteCount: number;
   createdAt: string;
+  isPinned?: boolean;
 }
 
 interface MemoryCardExportModalProps {

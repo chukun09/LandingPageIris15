@@ -14,5 +14,6 @@ public class MemoryPost
     public required string ThumbnailImagePath { get; set; }
     public int VoteCount { get; set; }
     public bool IsApproved { get; set; }
+    public bool IsPinned { get; set; } = false;
     public DateTimeOffset CreatedAt { get; set; }
 }

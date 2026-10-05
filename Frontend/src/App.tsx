@@ -29,6 +29,7 @@ interface Post {
   thumbnailUrl?: string;
   voteCount: number;
   createdAt: string;
+  isPinned?: boolean;
 }
 
 interface Podcast {
@@ -196,6 +197,27 @@ function App() {
       }
     } catch {
       triggerToast('Lỗi mạng kết nối.', 'error');
+    }
+  };
+
+  const handleTogglePin = async (id: number, isPinned?: boolean) => {
+    try {
+      const res = await fetch(`/api/admin/posts/${id}/pin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPinned }),
+      });
+      if (res.ok) {
+        setApprovedPosts(prev =>
+          prev.map(p => p.id === id ? { ...p, isPinned: isPinned ?? !p.isPinned } : p)
+        );
+        triggerToast('Cập nhật trạng thái ghim thành công!', 'success');
+        fetchData();
+      } else {
+        triggerToast('Lỗi khi cập nhật trạng thái ghim.', 'error');
+      }
+    } catch {
+      triggerToast('Không thể kết nối đến máy chủ.', 'error');
     }
   };
 
@@ -645,6 +667,7 @@ function App() {
         approvedPosts={approvedPosts}
         podcasts={podcasts}
         onApprove={handleApprovePost}
+        onTogglePin={handleTogglePin}
         onGeneratePodcast={handleGeneratePodcast}
         onUploadPodcast={handleUploadPodcast}
         onDeletePodcast={handleDeletePodcast}
