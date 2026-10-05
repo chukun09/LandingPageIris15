@@ -37,7 +37,8 @@ public sealed class MosaicSourceCache(
     IOptions<BackdropOptions> options,
     IImagePolicy imagePolicy,
     IWebHostEnvironment environment,
-    ILogger<MosaicSourceCache> logger) : IMosaicSourceCache
+    ILogger<MosaicSourceCache> logger,
+    Storage.IStorageService? storageService = null) : IMosaicSourceCache
 {
     private readonly BackdropOptions _o = options.Value;
 
@@ -54,16 +55,29 @@ public sealed class MosaicSourceCache(
         foreach (var (postId, relative) in originalPaths)
         {
             ct.ThrowIfCancellationRequested();
-            var path = Resolve(relative);
-            if (!File.Exists(path)) continue;
+            Stream? stream = null;
+            if (storageService != null)
+            {
+                stream = await storageService.GetFileStreamAsync(relative, ct);
+            }
+            else
+            {
+                var path = Resolve(relative);
+                if (File.Exists(path)) stream = File.OpenRead(path);
+            }
+
+            if (stream == null) continue;
 
             try
             {
-                // Image.Identify chỉ đọc header — vài chục micro giây mỗi file,
-                // nên không cần lưu kích thước vào cơ sở dữ liệu.
-                var info = await Image.IdentifyAsync(imagePolicy.Configuration, path, ct);
-                if (info is null) continue;
-                result[postId] = new SourceImageInfo(postId, path, info.Width, info.Height);
+                using (stream)
+                {
+                    // Image.Identify chỉ đọc header — vài chục micro giây mỗi file,
+                    // nên không cần lưu kích thước vào cơ sở dữ liệu.
+                    var info = await Image.IdentifyAsync(imagePolicy.Configuration, stream, ct);
+                    if (info is null) continue;
+                    result[postId] = new SourceImageInfo(postId, relative, info.Width, info.Height);
+                }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -76,33 +90,44 @@ public sealed class MosaicSourceCache(
 
     public async Task<string?> GetOrCreateAsync(int postId, string originalRelativePath, CancellationToken ct)
     {
-        var source = Resolve(originalRelativePath);
-        if (!File.Exists(source)) return null;
-
         Directory.CreateDirectory(CacheDir);
         var name = $"{Path.GetFileNameWithoutExtension(originalRelativePath)}_{_o.SourceCacheEdgePx}.jpg";
         var cached = Path.Combine(CacheDir, name);
 
-        // Bản đệm cũ hơn ảnh gốc thì dựng lại (ảnh gốc có thể bị thay thủ công).
-        if (File.Exists(cached) &&
-            File.GetLastWriteTimeUtc(cached) >= File.GetLastWriteTimeUtc(source))
+        if (File.Exists(cached))
         {
             return cached;
         }
 
+        Stream? stream = null;
+        if (storageService != null)
+        {
+            stream = await storageService.GetFileStreamAsync(originalRelativePath, ct);
+        }
+        else
+        {
+            var source = Resolve(originalRelativePath);
+            if (File.Exists(source)) stream = File.OpenRead(source);
+        }
+
+        if (stream == null) return null;
+
         try
         {
-            using var image = await Image.LoadAsync<Rgb24>(imagePolicy.Configuration, source, ct);
-            image.Mutate(x => x.Resize(new ResizeOptions
+            using (stream)
+            using (var image = await Image.LoadAsync<Rgb24>(imagePolicy.Configuration, stream, ct))
             {
-                Size = new Size(_o.SourceCacheEdgePx, _o.SourceCacheEdgePx),
-                Mode = ResizeMode.Crop,
-                Sampler = KnownResamplers.Lanczos3,
-            }));
+                image.Mutate(x => x.Resize(new ResizeOptions
+                {
+                    Size = new Size(_o.SourceCacheEdgePx, _o.SourceCacheEdgePx),
+                    Mode = ResizeMode.Crop,
+                    Sampler = KnownResamplers.Lanczos3,
+                }));
 
-            await using var stream = new FileStream(cached, FileMode.Create, FileAccess.Write, FileShare.None);
-            await image.SaveAsync(stream, new JpegEncoder { Quality = 90 }, ct);
-            return cached;
+                await using var fileStream = new FileStream(cached, FileMode.Create, FileAccess.Write, FileShare.None);
+                await image.SaveAsync(fileStream, new JpegEncoder { Quality = 90 }, ct);
+                return cached;
+            }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

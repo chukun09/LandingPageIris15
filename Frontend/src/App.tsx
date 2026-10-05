@@ -58,6 +58,7 @@ function App() {
   const [approvedPosts, setApprovedPosts] = useState<Post[]>([]);
   const [pendingPosts, setPendingPosts] = useState<Post[]>([]);
   const [podcasts, setPodcasts] = useState<Podcast[]>([]);
+  const [realDurations, setRealDurations] = useState<Record<number, number>>({});
 
   // Selected states
   const [currentPodcastIndex, setCurrentPodcastIndex] = useState(-1);
@@ -124,6 +125,24 @@ function App() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    podcasts.forEach((p) => {
+      if (p.audioUrl && !realDurations[p.id]) {
+        const audio = new Audio();
+        audio.preload = 'metadata';
+        audio.src = p.audioUrl;
+        audio.onloadedmetadata = () => {
+          if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
+            const actualSec = Math.round(audio.duration);
+            if (actualSec > 0) {
+              setRealDurations((prev) => ({ ...prev, [p.id]: actualSec }));
+            }
+          }
+        };
+      }
+    });
+  }, [podcasts]);
 
   useEffect(() => {
     if (isAdminPanelOpen) {
@@ -504,7 +523,10 @@ function App() {
                         <div className="flex flex-col gap-0.5 min-w-0 flex-1">
                           <span className="text-xs font-bold truncate block" title={pod.title}>{pod.title}</span>
                           <span className="text-[10px] text-brand-textMuted font-fira">
-                            {Math.floor(pod.durationSeconds / 60)}:{String(pod.durationSeconds % 60).padStart(2, '0')}
+                            {(() => {
+                              const sec = realDurations[pod.id] || pod.durationSeconds;
+                              return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+                            })()}
                           </span>
                         </div>
                       </div>

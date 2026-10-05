@@ -49,7 +49,8 @@ public interface IMosaicAtlasService
 public sealed class MosaicAtlasService(
     IServiceScopeFactory scopeFactory,
     Imaging.IImagePolicy imagePolicy,
-    IWebHostEnvironment environment) : IMosaicAtlasService
+    IWebHostEnvironment environment,
+    Storage.IStorageService? storageService = null) : IMosaicAtlasService
 {
     /// <summary>Bề rộng atlas cố định. WebGL2 bảo đảm MAX_TEXTURE_SIZE ≥ 2048.</summary>
     public const int AtlasWidth = 2048;
@@ -113,23 +114,40 @@ public sealed class MosaicAtlasService(
             ct.ThrowIfCancellationRequested();
 
             if (!thumbnails.TryGetValue(ordered[i].Id, out var relativePath)) continue;
-            var path = Path.Combine(webRoot, relativePath.TrimStart('/', '\\')
-                                                         .Replace('/', Path.DirectorySeparatorChar));
-            if (!File.Exists(path)) continue;
+
+            Stream? stream = null;
+            if (storageService != null)
+            {
+                stream = await storageService.GetFileStreamAsync(relativePath, ct);
+            }
+            else
+            {
+                var path = Path.Combine(webRoot, relativePath.TrimStart('/', '\\')
+                                                             .Replace('/', Path.DirectorySeparatorChar));
+                if (File.Exists(path))
+                {
+                    stream = File.OpenRead(path);
+                }
+            }
+
+            if (stream == null) continue;
 
             try
             {
-                using var tile = await Image.LoadAsync<Rgba32>(configuration, path, ct);
-                tile.Mutate(x => x.Resize(new ResizeOptions
+                using (stream)
+                using (var tile = await Image.LoadAsync<Rgba32>(configuration, stream, ct))
                 {
-                    Size = new Size(tileSize, tileSize),
-                    Mode = ResizeMode.Crop,
-                    Sampler = KnownResamplers.Lanczos3,
-                }));
+                    tile.Mutate(x => x.Resize(new ResizeOptions
+                    {
+                        Size = new Size(tileSize, tileSize),
+                        Mode = ResizeMode.Crop,
+                        Sampler = KnownResamplers.Lanczos3,
+                    }));
 
-                int column = i % columns;
-                int row = i / columns;
-                canvas.Mutate(x => x.DrawImage(tile, new Point(column * tileSize, row * tileSize), 1f));
+                    int column = i % columns;
+                    int row = i / columns;
+                    canvas.Mutate(x => x.DrawImage(tile, new Point(column * tileSize, row * tileSize), 1f));
+                }
             }
             catch
             {

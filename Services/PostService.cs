@@ -157,7 +157,7 @@ public sealed class PostService : IPostService
                 new MemoryPost
                 {
                     Message = "Chúc mừng sinh nhật IRIS tròn 15 tuổi! Tự hào là một mảnh ghép của đại gia đình IRIS thân thương. Chúc công ty ngày càng phát triển vững mạnh và vươn xa hơn nữa!",
-                    Department = "Phát triển phần mềm",
+                    Department = "Phòng Phát triển phần mềm",
                     OriginalImagePath = "/uploads/original/mock_teambuilding.png",
                     ThumbnailImagePath = "/uploads/thumbnail/mock_teambuilding.png",
                     VoteCount = 35,
@@ -167,7 +167,7 @@ public sealed class PostService : IPostService
                 new MemoryPost
                 {
                     Message = "15 năm - một chặng đường nhiều thử thách nhưng cũng đầy vinh quang. Cảm ơn IRIS đã luôn là ngôi nhà thứ hai tuyệt vời của tôi, nơi tôi được học hỏi và lớn khôn mỗi ngày.",
-                    Department = "P Kinh doanh",
+                    Department = "Phòng Kinh doanh",
                     OriginalImagePath = "/uploads/original/mock_office.png",
                     ThumbnailImagePath = "/uploads/thumbnail/mock_office.png",
                     VoteCount = 52,
@@ -187,7 +187,7 @@ public sealed class PostService : IPostService
                 new MemoryPost
                 {
                     Message = "Một khoảnh khắc teambuilding đáng nhớ cùng anh em. Chúc IRIS tuổi mới bùng nổ hơn nữa!",
-                    Department = "Kỹ thuật vận hành",
+                    Department = "Phòng Kỹ thuật vận hành",
                     OriginalImagePath = "/uploads/original/mock_teambuilding.png",
                     ThumbnailImagePath = "/uploads/thumbnail/mock_teambuilding.png",
                     VoteCount = 0,
@@ -207,7 +207,7 @@ public sealed class PostService : IPostService
                 new MemoryPost
                 {
                     Message = "Sứ mệnh tối ưu chi phí và gia tăng doanh thu cho khách hàng bằng công nghệ AI luôn là kim chỉ nam cho mọi dòng code của phòng sản phẩm chúng tôi.",
-                    Department = "Sản phẩm",
+                    Department = "Phòng Sản phẩm",
                     OriginalImagePath = "/uploads/original/mock_iris_2.png",
                     ThumbnailImagePath = "/uploads/thumbnail/mock_iris_2.png",
                     VoteCount = 30,
@@ -217,7 +217,7 @@ public sealed class PostService : IPostService
                 new MemoryPost
                 {
                     Message = "IRIS luôn đi đầu trong việc phát triển công nghệ lõi chuyên sâu về giọng nói và văn bản tiếng Việt. Giải pháp AI của chúng tôi thực sự rất ấn tượng và mang tính ứng dụng cao!",
-                    Department = "Đối soát vận hành",
+                    Department = "Phòng Đối soát vận hành",
                     OriginalImagePath = "/uploads/original/mock_iris_3.png",
                     ThumbnailImagePath = "/uploads/thumbnail/mock_iris_3.png",
                     VoteCount = 42,
@@ -227,7 +227,7 @@ public sealed class PostService : IPostService
                 new MemoryPost
                 {
                     Message = "Môi trường làm việc lý tưởng tại IRIS với chế độ phúc lợi toàn diện đã giúp tôi yên tâm công tác và cống hiến hết mình suốt 5 năm qua. Tự hào là một IRISer!",
-                    Department = "Hành chính nhân sự",
+                    Department = "Phòng Hành chính nhân sự",
                     OriginalImagePath = "/uploads/original/mock_iris_4.png",
                     ThumbnailImagePath = "/uploads/thumbnail/mock_iris_4.png",
                     VoteCount = 15,
@@ -237,7 +237,7 @@ public sealed class PostService : IPostService
                 new MemoryPost
                 {
                     Message = "App DINO đi học 4.0 - ứng dụng giáo trí tiền tiểu học cho trẻ từ 2-6 tuổi do IRIS phát triển đã đạt cột mốc mới về lượt tải và đánh giá tích cực từ phụ huynh. Chúc mừng team Dino!",
-                    Department = "Chăm sóc khách hàng",
+                    Department = "Phòng Chăm sóc khách hàng",
                     OriginalImagePath = "/uploads/original/mock_iris_5.png",
                     ThumbnailImagePath = "/uploads/thumbnail/mock_iris_5.png",
                     VoteCount = 50,
@@ -257,7 +257,7 @@ public sealed class PostService : IPostService
                 new MemoryPost
                 {
                     Message = "Làm việc chuyên nghiệp - Sản phẩm hoàn thiện - Dịch vụ chu đáo. Ba giá trị cốt lõi này đã làm nên thương hiệu IRIS TECH ngày hôm nay.",
-                    Department = "Kế toán",
+                    Department = "Phòng Kế toán",
                     OriginalImagePath = "/uploads/original/mock_iris_7.png",
                     ThumbnailImagePath = "/uploads/thumbnail/mock_iris_7.png",
                     VoteCount = 22,
@@ -267,7 +267,7 @@ public sealed class PostService : IPostService
                 new MemoryPost
                 {
                     Message = "Kỷ niệm chuyến đi Teambuilding Hè đáng nhớ vừa qua. Năng lượng của anh em IRIS luôn bùng nổ, gắn kết và sẵn sàng cho những thử thách mới!",
-                    Department = "Lái xe",
+                    Department = "Phòng Kỹ thuật vận hành",
                     OriginalImagePath = "/uploads/original/mock_iris_8.png",
                     ThumbnailImagePath = "/uploads/thumbnail/mock_iris_8.png",
                     VoteCount = 37,
@@ -277,7 +277,7 @@ public sealed class PostService : IPostService
                 new MemoryPost
                 {
                     Message = "Đêm Gala Dinner kỷ niệm 15 năm thật nhiều cảm xúc lắng đọng. Cảm ơn Ban lãnh đạo đã tổ chức một chương trình vô cùng hoành tráng và ý nghĩa cho tập thể CBNV!",
-                    Department = "Hành chính nhân sự",
+                    Department = "Phòng Hành chính nhân sự",
                     OriginalImagePath = "/uploads/original/mock_iris_9.png",
                     ThumbnailImagePath = "/uploads/thumbnail/mock_iris_9.png",
                     VoteCount = 48,
@@ -287,7 +287,7 @@ public sealed class PostService : IPostService
                 new MemoryPost
                 {
                     Message = "Tự hào là đơn vị khởi nghiệp công nghệ không ngừng nỗ lực để đem lại những giải pháp AI hữu ích nhất, đồng hành cùng doanh nghiệp Việt trong kỷ nguyên số.",
-                    Department = "Phát triển kinh doanh",
+                    Department = "Phòng Phát triển kinh doanh",
                     OriginalImagePath = "/uploads/original/mock_iris_10.png",
                     ThumbnailImagePath = "/uploads/thumbnail/mock_iris_10.png",
                     VoteCount = 19,
@@ -334,30 +334,33 @@ public sealed class PostService : IPostService
             _ => "image/jpeg"
         };
 
+        // Đọc toàn bộ ảnh vào MemoryStream để không phụ thuộc vào file đệm vật lý trên server
+        using var originalMemoryStream = new MemoryStream();
+        await imageStream.CopyToAsync(originalMemoryStream, ct);
+        originalMemoryStream.Position = 0;
+
         string originalUrl;
         string thumbnailUrl;
 
         // 1. Lưu file ảnh gốc
         if (_storageService != null)
         {
-            originalUrl = await _storageService.SaveFileAsync(imageStream, $"uploads/original/{uniqueFileName}", contentType, ct);
+            originalUrl = await _storageService.SaveFileAsync(originalMemoryStream, $"uploads/original/{uniqueFileName}", contentType, ct);
         }
         else
         {
             var originalPath = Path.Combine(_webRootPath, "uploads", "original", uniqueFileName);
             using (var fileStream = new FileStream(originalPath, FileMode.Create))
             {
-                await imageStream.CopyToAsync(fileStream, ct);
+                await originalMemoryStream.CopyToAsync(fileStream, ct);
             }
             originalUrl = $"/uploads/original/{uniqueFileName}";
         }
 
-        // 2. Tạo ảnh thumbnail nén (Crop vuông 300x300 để xếp lưới cho đẹp)
-        var thumbnailMemoryStream = new MemoryStream();
-        var localOriginalPath = Path.Combine(_webRootPath, "uploads", "original", uniqueFileName);
-        using (var image = File.Exists(localOriginalPath)
-            ? await Image.LoadAsync(_imagePolicy.Configuration, localOriginalPath, ct)
-            : await Image.LoadAsync(_imagePolicy.Configuration, imageStream, ct))
+        // 2. Tạo ảnh thumbnail nén trực tiếp trong bộ nhớ (Crop vuông 300x300 để xếp lưới)
+        using var thumbnailMemoryStream = new MemoryStream();
+        originalMemoryStream.Position = 0;
+        using (var image = await Image.LoadAsync(_imagePolicy.Configuration, originalMemoryStream, ct))
         {
             image.Mutate(x => x.Resize(new ResizeOptions
             {
@@ -473,11 +476,19 @@ public sealed class PostService : IPostService
         }
         else
         {
-            // Nếu từ chối, xóa file vật lý và xóa khỏi database
-            var originalFull = Path.Combine(_webRootPath, post.OriginalImagePath.TrimStart('/'));
-            var thumbFull = Path.Combine(_webRootPath, post.ThumbnailImagePath.TrimStart('/'));
-            if (File.Exists(originalFull)) File.Delete(originalFull);
-            if (File.Exists(thumbFull)) File.Delete(thumbFull);
+            // Nếu từ chối, xóa file khỏi kho lưu trữ (R2 hoặc Local) và xóa khỏi database
+            if (_storageService != null)
+            {
+                await _storageService.DeleteFileAsync(post.OriginalImagePath, ct);
+                await _storageService.DeleteFileAsync(post.ThumbnailImagePath, ct);
+            }
+            else
+            {
+                var originalFull = Path.Combine(_webRootPath, post.OriginalImagePath.TrimStart('/'));
+                var thumbFull = Path.Combine(_webRootPath, post.ThumbnailImagePath.TrimStart('/'));
+                if (File.Exists(originalFull)) File.Delete(originalFull);
+                if (File.Exists(thumbFull)) File.Delete(thumbFull);
+            }
 
             _context.MemoryPosts.Remove(post);
         }

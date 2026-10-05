@@ -171,6 +171,61 @@ public static class AdminEndpoints
         .WithName("DeletePodcast")
         .WithSummary("Xóa Podcast đã tạo")
         .WithDescription("Xóa Podcast khỏi cơ sở dữ liệu SQLite và tệp âm thanh vật lý trên đĩa.");
+
+        // 6. Warm-up Modal ViXTTS Container
+        group.MapPost("/tts/warmup", async Task<Results<Ok<object>, ProblemHttpResult>> (
+            IHttpClientFactory httpClientFactory,
+            Microsoft.Extensions.Configuration.IConfiguration configuration,
+            CancellationToken ct) =>
+        {
+            var baseUrl = configuration["TtsSettings:ViXtts:BaseUrl"] 
+                          ?? configuration["ViXtts:ApiUrl"] 
+                          ?? "http://localhost:8000";
+
+            var healthUrl = baseUrl.TrimEnd('/') + "/healthz";
+            var apiKey = configuration["TtsSettings:ViXtts:ApiKey"];
+
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            try
+            {
+                var client = httpClientFactory.CreateClient("ViXttsClient");
+                using var request = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Get, healthUrl);
+                if (!string.IsNullOrWhiteSpace(apiKey))
+                {
+                    request.Headers.Add("X-API-Key", apiKey);
+                }
+
+                using var response = await client.SendAsync(request, ct);
+                sw.Stop();
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var content = await response.Content.ReadAsStringAsync(ct);
+                    return TypedResults.Ok<object>(new
+                    {
+                        success = true,
+                        ready = true,
+                        durationMs = sw.ElapsedMilliseconds,
+                        message = $"GPU Container ViXTTS đã sẵn sàng (phản hồi trong {sw.ElapsedMilliseconds / 1000.0:F1}s).",
+                        detail = content
+                    });
+                }
+
+                return TypedResults.Problem(
+                    detail: $"Modal container phản hồi HTTP {(int)response.StatusCode}: {response.ReasonPhrase}",
+                    statusCode: StatusCodes.Status502BadGateway);
+            }
+            catch (System.Exception ex)
+            {
+                sw.Stop();
+                return TypedResults.Problem(
+                    detail: $"Khởi động container Modal thất bại sau {sw.ElapsedMilliseconds / 1000.0:F1}s: {ex.Message}",
+                    statusCode: StatusCodes.Status504GatewayTimeout);
+            }
+        })
+        .WithName("WarmupViXtts")
+        .WithSummary("Khởi động Container Modal ViXTTS")
+        .WithDescription("Gửi request tới /healthz của Modal để đánh thức GPU container từ trạng thái ngủ, tránh timeout 60s khi tạo podcast.");
     }
 }
 

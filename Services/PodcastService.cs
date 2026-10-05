@@ -86,11 +86,22 @@ public sealed class PodcastService : IPodcastService
 
     public async Task<PodcastResponse> GeneratePodcastAsync(int postId, string title, string? apiKey, string? region, CancellationToken ct)
     {
-        // 1. Tìm bài đăng gốc
+        // 1. Tìm bài đăng gốc và kiểm tra điều kiện tạo Podcast
         var post = await _context.MemoryPosts.FindAsync(new object[] { postId }, ct);
         if (post == null)
         {
             throw new KeyNotFoundException($"Không tìm thấy bài viết với ID = {postId}");
+        }
+
+        if (!post.IsApproved)
+        {
+            throw new InvalidOperationException("Chỉ những bài viết đã được duyệt mới có thể tạo Podcast/Radio.");
+        }
+
+        var existingPodcast = await _context.PodcastEpisodes.AnyAsync(p => p.PostId == postId, ct);
+        if (existingPodcast)
+        {
+            throw new InvalidOperationException("Bài viết này đã có tập Podcast/Radio. Không thể tạo mới.");
         }
 
         // 2. Xác định Nhà cung cấp TTS chính và cấu hình Fallback
@@ -153,16 +164,15 @@ public sealed class PodcastService : IPodcastService
             audioPath = $"/{relativePath}";
         }
 
-        // 4. Ước lượng độ dài âm thanh
-        int wordCount = post.Message.Split(new[] { ' ', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).Length;
-        int estimatedDuration = Math.Max(5, (int)(wordCount / 2.5));
+        // 4. Tính toán thời lượng âm thanh chuẩn xác từ header file WAV hoặc fallback
+        int estimatedDuration = CalculateAudioDurationSeconds(audioBytes, fileExtension, post.Message);
 
         // 5. Lưu tập Podcast vào cơ sở dữ liệu
         var episode = new PodcastEpisode
         {
             PostId = postId,
             Title = title,
-            AudioPath = relativePath,
+            AudioPath = audioPath,
             DurationSeconds = estimatedDuration,
             CreatedAt = DateTimeOffset.UtcNow
         };
@@ -250,11 +260,19 @@ public sealed class PodcastService : IPodcastService
 
         if (postId.HasValue)
         {
-            var postExists = await _context.MemoryPosts.AnyAsync(p => p.Id == postId.Value, ct);
-            if (!postExists)
+            var post = await _context.MemoryPosts.FindAsync(new object[] { postId.Value }, ct);
+            if (post == null)
             {
-                _logger.LogWarning("Không tìm thấy bài viết ID={PostId} để liên kết podcast, tiếp tục tạo podcast độc lập.", postId.Value);
-                postId = null;
+                throw new KeyNotFoundException($"Không tìm thấy bài viết ID = {postId.Value}");
+            }
+            if (!post.IsApproved)
+            {
+                throw new InvalidOperationException("Chỉ những bài viết đã được duyệt mới có thể liên kết Podcast/Radio.");
+            }
+            var hasExisting = await _context.PodcastEpisodes.AnyAsync(p => p.PostId == postId.Value, ct);
+            if (hasExisting)
+            {
+                throw new InvalidOperationException("Bài viết này đã có tập Podcast/Radio, không thể tạo thêm.");
             }
         }
 
@@ -287,14 +305,31 @@ public sealed class PodcastService : IPodcastService
         int duration = durationSeconds.GetValueOrDefault();
         if (duration <= 0)
         {
-            duration = Math.Max(10, (int)(audioFile.Length / 16000));
+            if (ext.Equals(".wav", StringComparison.OrdinalIgnoreCase) && audioFile.Length >= 44)
+            {
+                try
+                {
+                    using var headerStream = audioFile.OpenReadStream();
+                    var headerBytes = new byte[Math.Min(4096, (int)audioFile.Length)];
+                    int read = headerStream.Read(headerBytes, 0, headerBytes.Length);
+                    duration = CalculateAudioDurationSeconds(headerBytes, "wav", string.Empty);
+                }
+                catch
+                {
+                    // Fallback
+                }
+            }
+            if (duration <= 0)
+            {
+                duration = Math.Max(5, (int)(audioFile.Length / 16000));
+            }
         }
 
         var episode = new PodcastEpisode
         {
             PostId = postId,
             Title = title.Trim(),
-            AudioPath = relativePath,
+            AudioPath = audioUrl,
             DurationSeconds = duration,
             CreatedAt = DateTimeOffset.UtcNow
         };
@@ -312,5 +347,47 @@ public sealed class PodcastService : IPodcastService
             episode.AudioPath,
             episode.DurationSeconds,
             episode.CreatedAt);
+    }
+
+    private static int CalculateAudioDurationSeconds(byte[] audioBytes, string fileExtension, string fallbackText)
+    {
+        if (audioBytes == null || audioBytes.Length == 0) return 5;
+
+        if (fileExtension.Equals("wav", StringComparison.OrdinalIgnoreCase) && audioBytes.Length >= 44)
+        {
+            try
+            {
+                // RIFF WAVE header check
+                if (audioBytes[0] == 'R' && audioBytes[1] == 'I' && audioBytes[2] == 'F' && audioBytes[3] == 'F' &&
+                    audioBytes[8] == 'W' && audioBytes[9] == 'A' && audioBytes[10] == 'V' && audioBytes[11] == 'E')
+                {
+                    int byteRate = BitConverter.ToInt32(audioBytes, 28);
+                    if (byteRate > 0)
+                    {
+                        int dataSize = audioBytes.Length - 44;
+                        for (int i = 12; i < audioBytes.Length - 8; i++)
+                        {
+                            if (audioBytes[i] == 'd' && audioBytes[i + 1] == 'a' && audioBytes[i + 2] == 't' && audioBytes[i + 3] == 'a')
+                            {
+                                dataSize = BitConverter.ToInt32(audioBytes, i + 4);
+                                break;
+                            }
+                        }
+                        if (dataSize > 0)
+                        {
+                            double seconds = (double)dataSize / byteRate;
+                            return Math.Max(1, (int)Math.Round(seconds));
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Fallback
+            }
+        }
+
+        int wordCount = fallbackText.Split(new[] { ' ', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).Length;
+        return Math.Max(5, (int)(wordCount / 2.5));
     }
 }

@@ -23,4 +23,12 @@ public interface IStorageService
     /// <param name="ct">CancellationToken</param>
     /// <returns>True nếu xóa thành công hoặc file không tồn tại</returns>
     Task<bool> DeleteFileAsync(string fileUrlOrPath, CancellationToken ct);
+
+    /// <summary>
+    /// Lấy luồng dữ liệu của file từ kho lưu trữ (R2 hoặc Local).
+    /// </summary>
+    /// <param name="fileUrlOrPath">URL hoặc đường dẫn của file</param>
+    /// <param name="ct">CancellationToken</param>
+    /// <returns>Stream chứa dữ liệu file, hoặc null nếu không tồn tại</returns>
+    Task<Stream?> GetFileStreamAsync(string fileUrlOrPath, CancellationToken ct);
 }

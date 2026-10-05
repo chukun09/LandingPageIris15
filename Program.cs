@@ -61,7 +61,7 @@ else
 builder.Services.AddMemoryCache();
 builder.Services.AddHttpClient("ViXttsClient", client =>
 {
-    client.Timeout = TimeSpan.FromSeconds(60); // Timeout cho ViXTTS GPU Synthesis
+    client.Timeout = TimeSpan.FromSeconds(120); // Timeout cho ViXTTS GPU Synthesis (tránh timeout khi Modal container cold start)
 });
 builder.Services.AddHttpClient();
 

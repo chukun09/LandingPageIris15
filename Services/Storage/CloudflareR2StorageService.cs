@@ -66,35 +66,7 @@ public sealed class CloudflareR2StorageService : IStorageService, IDisposable
 
         var normalizedKey = relativePath.Replace('\\', '/').TrimStart('/');
 
-        // 1. Luôn lưu một bản sao cục bộ để ImagePolicy, Backdrop service hoặc Local cache đọc được
-        try
-        {
-            var localPath = Path.Combine(_webRootPath, normalizedKey.Replace('/', Path.DirectorySeparatorChar));
-            var localDir = Path.GetDirectoryName(localPath);
-            if (!string.IsNullOrWhiteSpace(localDir) && !Directory.Exists(localDir))
-            {
-                Directory.CreateDirectory(localDir);
-            }
-
-            if (stream.CanSeek)
-            {
-                stream.Position = 0;
-            }
-
-            using var localFileStream = new FileStream(localPath, FileMode.Create, FileAccess.Write, FileShare.None);
-            await stream.CopyToAsync(localFileStream, ct);
-
-            if (stream.CanSeek)
-            {
-                stream.Position = 0;
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Không thể lưu bản sao cục bộ cho file {Key}", normalizedKey);
-        }
-
-        // 2. Nếu cấu hình Cloudflare R2, đẩy file lên Cloudflare R2 Bucket
+        // 1. Nếu cấu hình Cloudflare R2, đẩy trực tiếp lên Cloudflare R2 Bucket (HOÀN TOÀN KHÔNG LƯU VÀO DISK VẬT LÝ)
         if (_isR2Configured && _s3Client != null)
         {
             try
@@ -116,19 +88,89 @@ public sealed class CloudflareR2StorageService : IStorageService, IDisposable
                 await _s3Client.PutObjectAsync(putRequest, ct);
                 _logger.LogInformation("Đã tải file lên Cloudflare R2 thành công: {Key}", normalizedKey);
 
-                // Trả về Public URL nếu có, nếu không trả về dạng CDN R2
                 return !string.IsNullOrWhiteSpace(_publicUrl) 
                     ? $"{_publicUrl}/{normalizedKey}" 
                     : $"/{normalizedKey}";
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Lỗi khi tải file lên Cloudflare R2 cho key {Key}. Fallback sang đường dẫn cục bộ.", normalizedKey);
+                _logger.LogError(ex, "Lỗi khi tải file lên Cloudflare R2 cho key {Key}. Đang fallback sang lưu cục bộ tạm thời.", normalizedKey);
             }
         }
 
-        // Fallback đường dẫn cục bộ
-        return $"/{normalizedKey}";
+        // 2. Chế độ Fallback cục bộ (chỉ dùng khi R2 chưa cấu hình hoặc upload R2 lỗi trong môi trường Dev)
+        try
+        {
+            var localPath = Path.Combine(_webRootPath, normalizedKey.Replace('/', Path.DirectorySeparatorChar));
+            var localDir = Path.GetDirectoryName(localPath);
+            if (!string.IsNullOrWhiteSpace(localDir) && !Directory.Exists(localDir))
+            {
+                Directory.CreateDirectory(localDir);
+            }
+
+            if (stream.CanSeek)
+            {
+                stream.Position = 0;
+            }
+
+            using var localFileStream = new FileStream(localPath, FileMode.Create, FileAccess.Write, FileShare.None);
+            await stream.CopyToAsync(localFileStream, ct);
+
+            return $"/{normalizedKey}";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Lỗi khi lưu file cục bộ cho key {Key}", normalizedKey);
+            return $"/{normalizedKey}";
+        }
+    }
+
+    public async Task<Stream?> GetFileStreamAsync(string fileUrlOrPath, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(fileUrlOrPath))
+        {
+            return null;
+        }
+
+        var normalizedKey = ExtractKey(fileUrlOrPath);
+
+        // 1. Kiểm tra nếu có file cục bộ (cho mock data hoặc môi trường local)
+        var localPath = Path.Combine(_webRootPath, normalizedKey.Replace('/', Path.DirectorySeparatorChar));
+        if (File.Exists(localPath))
+        {
+            return File.OpenRead(localPath);
+        }
+
+        // 2. Nếu cấu hình R2, tải luồng stream từ Cloudflare R2 Bucket
+        if (_isR2Configured && _s3Client != null)
+        {
+            try
+            {
+                var getRequest = new GetObjectRequest
+                {
+                    BucketName = _bucketName,
+                    Key = normalizedKey
+                };
+
+                using var response = await _s3Client.GetObjectAsync(getRequest, ct);
+                var memoryStream = new MemoryStream();
+                await response.ResponseStream.CopyToAsync(memoryStream, ct);
+                memoryStream.Position = 0;
+                return memoryStream;
+            }
+            catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                _logger.LogWarning("Không tìm thấy file trên Cloudflare R2: {Key}", normalizedKey);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi khi tải file từ Cloudflare R2 cho key {Key}", normalizedKey);
+                return null;
+            }
+        }
+
+        return null;
     }
 
     public async Task<bool> DeleteFileAsync(string fileUrlOrPath, CancellationToken ct)
@@ -138,24 +180,7 @@ public sealed class CloudflareR2StorageService : IStorageService, IDisposable
             return true;
         }
 
-        // Trích xuất relative key từ URL hoặc path
-        var normalizedKey = fileUrlOrPath;
-        if (!string.IsNullOrWhiteSpace(_publicUrl) && normalizedKey.StartsWith(_publicUrl, StringComparison.OrdinalIgnoreCase))
-        {
-            normalizedKey = normalizedKey.Substring(_publicUrl.Length).TrimStart('/');
-        }
-        else if (normalizedKey.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || normalizedKey.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-        {
-            if (Uri.TryCreate(fileUrlOrPath, UriKind.Absolute, out var uri))
-            {
-                normalizedKey = uri.AbsolutePath.TrimStart('/');
-            }
-        }
-        else
-        {
-            normalizedKey = normalizedKey.TrimStart('/').Replace('\\', '/');
-        }
-
+        var normalizedKey = ExtractKey(fileUrlOrPath);
         var deleted = false;
 
         // Xóa trên Cloudflare R2 nếu có
@@ -178,7 +203,7 @@ public sealed class CloudflareR2StorageService : IStorageService, IDisposable
             }
         }
 
-        // Xóa file cục bộ
+        // Xóa file cục bộ nếu tồn tại
         try
         {
             var localPath = Path.Combine(_webRootPath, normalizedKey.Replace('/', Path.DirectorySeparatorChar));
@@ -194,6 +219,25 @@ public sealed class CloudflareR2StorageService : IStorageService, IDisposable
         }
 
         return deleted;
+    }
+
+    private string ExtractKey(string fileUrlOrPath)
+    {
+        var normalized = fileUrlOrPath.Trim();
+        if (!string.IsNullOrWhiteSpace(_publicUrl) && normalized.StartsWith(_publicUrl, StringComparison.OrdinalIgnoreCase))
+        {
+            return normalized.Substring(_publicUrl.Length).TrimStart('/');
+        }
+
+        if (normalized.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || normalized.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            if (Uri.TryCreate(fileUrlOrPath, UriKind.Absolute, out var uri))
+            {
+                return uri.AbsolutePath.TrimStart('/');
+            }
+        }
+
+        return normalized.TrimStart('/').Replace('\\', '/');
     }
 
     public void Dispose()

@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { Mic, Sparkles, Search, CheckCircle2, Clock, Volume2, AlertCircle, Upload, Music, FileAudio, Play } from 'lucide-react';
+import React, { useState, useRef, useMemo } from 'react';
+import { Mic, Sparkles, Search, CheckCircle2, Volume2, AlertCircle, Upload, Music, FileAudio, Play, Zap } from 'lucide-react';
 
 interface MemoryPostItem {
   id: number;
@@ -11,21 +11,30 @@ interface MemoryPostItem {
   isApproved?: boolean;
 }
 
+interface PodcastEpisodeItem {
+  id: number;
+  postId?: number;
+  title: string;
+  audioUrl: string;
+  durationSeconds: number;
+  createdAt: string;
+}
+
 interface PodcastStudioTabProps {
-  pendingPosts: MemoryPostItem[];
+  pendingPosts?: MemoryPostItem[];
   approvedPosts: MemoryPostItem[];
+  podcasts?: PodcastEpisodeItem[];
   onGeneratePodcast: (id: number, title: string, apiKey: string, region: string) => Promise<void>;
   onUploadPodcast: (formData: FormData) => Promise<void>;
 }
 
 export const PodcastStudioTab: React.FC<PodcastStudioTabProps> = ({
-  pendingPosts,
   approvedPosts,
+  podcasts = [],
   onGeneratePodcast,
   onUploadPodcast,
 }) => {
   const [studioMode, setStudioMode] = useState<'tts' | 'upload'>('tts');
-  const [listType, setListType] = useState<'pending' | 'approved'>('approved');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPost, setSelectedPost] = useState<MemoryPostItem | null>(null);
   const [podcastTitle, setPodcastTitle] = useState('');
@@ -34,18 +43,64 @@ export const PodcastStudioTab: React.FC<PodcastStudioTabProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // Trạng thái Warm-up Modal GPU Container
+  const [isWarmingUp, setIsWarmingUp] = useState(false);
+  const [warmupSeconds, setWarmupSeconds] = useState(0);
+  const [gpuStatus, setGpuStatus] = useState<'idle' | 'warming' | 'ready' | 'error'>('idle');
+  const [gpuMessage, setGpuMessage] = useState<string>('');
+
+  const postIdsWithPodcast = useMemo(() => {
+    const set = new Set<number>();
+    podcasts.forEach(p => {
+      if (p.postId) set.add(p.postId);
+    });
+    return set;
+  }, [podcasts]);
+
+  const handleWarmupModal = async () => {
+    setIsWarmingUp(true);
+    setGpuStatus('warming');
+    setWarmupSeconds(0);
+    const timer = setInterval(() => {
+      setWarmupSeconds(s => s + 1);
+    }, 1000);
+
+    try {
+      const res = await fetch('/api/admin/tts/warmup', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok && data.ready) {
+        setGpuStatus('ready');
+        setGpuMessage(data.message || 'Modal GPU ViXTTS đã sẵn sàng!');
+      } else {
+        setGpuStatus('error');
+        setGpuMessage(data.detail || 'Khởi động GPU thất bại.');
+      }
+    } catch (err: unknown) {
+      setGpuStatus('error');
+      setGpuMessage(err instanceof Error ? err.message : 'Không thể kết nối đến máy chủ.');
+    } finally {
+      clearInterval(timer);
+      setIsWarmingUp(false);
+    }
+  };
+
   // State cho chế độ upload file audio
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const activeList = listType === 'pending' ? pendingPosts : approvedPosts;
+  // Chỉ cho phép các bài viết đã duyệt được tạo Podcast
+  const activeList = approvedPosts;
   const filteredPosts = activeList.filter(p =>
     (p.message && p.message.toLowerCase().includes(searchTerm.toLowerCase())) ||
     (p.department && p.department.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const handleSelectPost = (post: MemoryPostItem) => {
+    if (postIdsWithPodcast.has(post.id)) {
+      setStatusMessage({ type: 'error', text: `Bài viết #${post.id} đã có tập Radio phát thanh. Mỗi bài viết chỉ tạo một số Radio duy nhất.` });
+      return;
+    }
     setSelectedPost(post);
     // Auto-generate title
     const shortDept = post.department ? `[${post.department}]` : '';
@@ -164,35 +219,60 @@ export const PodcastStudioTab: React.FC<PodcastStudioTabProps> = ({
               Podcast AI Studio — Chuyển Kỷ Niệm Thành Thanh Âm Radio
             </h3>
             <p className="text-xs text-brand-textSecondary">
-              Chọn bất kỳ bài viết nào (đã duyệt hoặc chưa duyệt) để chuyển đổi nội dung lời chúc thành số phát thanh AI.
+              Chỉ áp dụng cho các bài viết đã duyệt. Mỗi bài viết chỉ tạo đúng một số Radio duy nhất.
             </p>
           </div>
         </div>
 
-        {/* List type toggle */}
-        <div className="flex items-center bg-brand-bg p-1 rounded-xl border border-brand-border shrink-0 self-start md:self-auto">
+        {/* Nút Warm-up Modal GPU ViXTTS */}
+        <div className="flex items-center gap-3 shrink-0 self-start md:self-auto">
           <button
-            onClick={() => { setListType('approved'); setSelectedPost(null); }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              listType === 'approved'
-                ? 'bg-brand-primary text-white shadow-sm'
-                : 'text-brand-textMuted hover:text-brand-textPrimary'
+            type="button"
+            onClick={handleWarmupModal}
+            disabled={isWarmingUp}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shadow-sm ${
+              gpuStatus === 'ready'
+                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30'
+                : isWarmingUp
+                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse'
+                : 'bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 text-amber-300 border border-amber-500/40 active:scale-95'
             }`}
+            title="Đánh thức container Modal ViXTTS từ trạng thái ngủ để tránh timeout khi tạo podcast"
           >
-            Đã Duyệt ({approvedPosts.length})
+            {isWarmingUp ? (
+              <>
+                <div className="w-3.5 h-3.5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+                <span>Đang đánh thức GPU ({warmupSeconds}s)...</span>
+              </>
+            ) : gpuStatus === 'ready' ? (
+              <>
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>🟢 GPU ViXTTS Sẵn sàng</span>
+              </>
+            ) : (
+              <>
+                <Zap className="w-3.5 h-3.5 text-amber-400" />
+                <span>⚡ Khởi động GPU (Warm-up)</span>
+              </>
+            )}
           </button>
-          <button
-            onClick={() => { setListType('pending'); setSelectedPost(null); }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              listType === 'pending'
-                ? 'bg-brand-secondary text-brand-bg shadow-sm'
-                : 'text-brand-textMuted hover:text-brand-textPrimary'
-            }`}
-          >
-            Chờ Duyệt ({pendingPosts.length})
-          </button>
+
+          <div className="text-[11px] px-2.5 py-1.5 rounded-xl bg-brand-bg border border-brand-border text-brand-textMuted font-mono">
+            Chưa có Radio: <span className="font-bold text-brand-primary">{approvedPosts.length - postIdsWithPodcast.size}</span>/{approvedPosts.length}
+          </div>
         </div>
       </div>
+
+      {gpuMessage && (
+        <div className={`p-3 rounded-xl border text-xs flex items-center justify-between ${
+          gpuStatus === 'ready'
+            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+            : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+        }`}>
+          <span>{gpuMessage}</span>
+          <button type="button" onClick={() => setGpuMessage('')} className="text-brand-textMuted hover:text-brand-textPrimary">✕</button>
+        </div>
+      )}
 
       {/* Main Studio Grid: Left List (Pick Post), Right Form (Config & Generate) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -202,7 +282,7 @@ export const PodcastStudioTab: React.FC<PodcastStudioTabProps> = ({
             <Search className="w-4 h-4 text-brand-textMuted absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Tìm theo nội dung, phòng ban..."
+              placeholder="Tìm bài viết đã duyệt theo nội dung, phòng ban..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-9 pr-3 py-2 bg-brand-bg border border-brand-border rounded-xl text-xs text-brand-textPrimary focus:outline-none focus:border-brand-primary transition-all"
@@ -213,22 +293,28 @@ export const PodcastStudioTab: React.FC<PodcastStudioTabProps> = ({
             {filteredPosts.length === 0 ? (
               <div className="p-8 text-center bg-brand-surface/30 border border-dashed border-brand-border rounded-2xl">
                 <p className="text-xs text-brand-textMuted italic">
-                  Không tìm thấy bài viết nào trong danh sách {listType === 'approved' ? 'Đã duyệt' : 'Chờ duyệt'}.
+                  Không tìm thấy bài viết đã duyệt nào phù hợp.
                 </p>
               </div>
             ) : (
               filteredPosts.map((post) => {
                 const isSelected = selectedPost?.id === post.id;
                 const imgUrl = post.thumbnailUrl || post.thumbnailImagePath;
+                const hasPodcast = postIdsWithPodcast.has(post.id);
                 return (
                   <div
                     key={post.id}
-                    onClick={() => handleSelectPost(post)}
-                    className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-start gap-3 ${
-                      isSelected
-                        ? 'bg-brand-primary/10 border-brand-primary text-brand-textPrimary shadow-sm'
-                        : 'bg-brand-surface/40 border-brand-border/60 hover:bg-brand-surfaceHover hover:border-brand-border text-brand-textSecondary'
+                    onClick={() => {
+                      if (!hasPodcast) handleSelectPost(post);
+                    }}
+                    className={`p-3.5 rounded-2xl border transition-all flex items-start gap-3 ${
+                      hasPodcast
+                        ? 'opacity-40 cursor-not-allowed bg-brand-surface/20 border-brand-border/40'
+                        : isSelected
+                        ? 'bg-brand-primary/10 border-brand-primary text-brand-textPrimary shadow-sm cursor-pointer'
+                        : 'bg-brand-surface/40 border-brand-border/60 hover:bg-brand-surfaceHover hover:border-brand-border text-brand-textSecondary cursor-pointer'
                     }`}
+                    title={hasPodcast ? `Bài viết #${post.id} đã có tập Radio phát thanh` : `Chọn bài #${post.id} để tạo Radio`}
                   >
                     {imgUrl ? (
                       <img
@@ -246,13 +332,13 @@ export const PodcastStudioTab: React.FC<PodcastStudioTabProps> = ({
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-brand-surface border border-brand-border text-brand-primary truncate">
                           {post.department || 'Ẩn danh'}
                         </span>
-                        {listType === 'pending' ? (
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 flex items-center gap-1">
-                            <Clock className="w-2.5 h-2.5" /> Chờ duyệt
+                        {hasPodcast ? (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+                            <Music className="w-2.5 h-2.5" /> Đã có Radio
                           </span>
                         ) : (
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-500 flex items-center gap-1">
-                            <CheckCircle2 className="w-2.5 h-2.5" /> Đã duyệt
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-brand-primary/10 text-brand-primary flex items-center gap-1">
+                            <Sparkles className="w-2.5 h-2.5" /> Chưa có Radio
                           </span>
                         )}
                       </div>
