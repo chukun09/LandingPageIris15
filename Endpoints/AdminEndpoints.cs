@@ -3,11 +3,13 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using LandingPageEvent.DTOs;
 using LandingPageEvent.Models;
 using LandingPageEvent.Services;
+using LandingPageEvent.Services.Auth;
 
 namespace LandingPageEvent.Endpoints;
 
@@ -18,8 +20,29 @@ public static class AdminEndpoints
         var group = app.MapGroup("/api/admin")
             .WithTags("Admin Panel Operations");
 
+        // 0. Xác thực đăng nhập Ban Tổ Chức (Public)
+        group.MapPost("/auth/login", (
+            [FromBody] AdminLoginRequest request,
+            IAdminTokenService tokenService) =>
+        {
+            if (string.IsNullOrWhiteSpace(request?.Password) || !tokenService.ValidatePassword(request.Password))
+            {
+                return Results.Json(new { error = "Mật khẩu quản trị không chính xác!" }, statusCode: StatusCodes.Status401Unauthorized);
+            }
+
+            var token = tokenService.GenerateToken();
+            return Results.Ok(new { success = true, token });
+        })
+        .WithName("AdminLogin")
+        .WithSummary("Đăng nhập xác thực ban tổ chức")
+        .WithDescription("Xác thực mật khẩu quản trị và cấp token HMAC-SHA256 có thời hạn 7 ngày.");
+
+        // Nhóm các Endpoint yêu cầu quyền Admin (Protected by AdminAuthFilter)
+        var protectedGroup = group.MapGroup("")
+            .AddEndpointFilter<AdminAuthFilter>();
+
         // 1. Lấy danh sách các bài viết chờ duyệt
-        group.MapGet("/posts/pending", async Task<Ok<IReadOnlyList<MemoryPost>>> (
+        protectedGroup.MapGet("/posts/pending", async Task<Ok<IReadOnlyList<MemoryPost>>> (
             IPostService postService,
             CancellationToken ct) =>
         {
@@ -31,7 +54,7 @@ public static class AdminEndpoints
         .WithDescription("Dành cho ban tổ chức kiểm duyệt nội dung.");
 
         // 2. Duyệt hoặc xóa bài viết
-        group.MapPost("/posts/{id:int}/approve", async Task<Results<Ok<string>, NotFound>> (
+        protectedGroup.MapPost("/posts/{id:int}/approve", async Task<Results<Ok<string>, NotFound>> (
             int id,
             [FromBody] ApprovePostRequest request,
             IPostService postService,
@@ -50,7 +73,7 @@ public static class AdminEndpoints
         .WithDescription("Nếu duyệt = true, bài viết xuất hiện trên Mosaic. Nếu duyệt = false, xóa bài viết khỏi CSDL và file vật lý.");
 
         // 2b. Ghim hoặc bỏ ghim bài viết lên đầu
-        group.MapPost("/posts/{id:int}/pin", async Task<Results<Ok<string>, NotFound>> (
+        protectedGroup.MapPost("/posts/{id:int}/pin", async Task<Results<Ok<string>, NotFound>> (
             int id,
             [FromBody] PinPostRequest? request,
             IPostService postService,
@@ -68,7 +91,7 @@ public static class AdminEndpoints
         .WithDescription("Ghim bài viết để luôn ưu tiên hiển thị ở đầu danh sách ký ức.");
 
         // 3. Chuyển đổi bài viết đã duyệt thành Podcast AI
-        group.MapPost("/posts/{id:int}/podcast", async Task<Results<Ok<PodcastResponse>, BadRequest<string>, NotFound>> (
+        protectedGroup.MapPost("/posts/{id:int}/podcast", async Task<Results<Ok<PodcastResponse>, BadRequest<string>, NotFound>> (
             int id,
             [FromBody] GeneratePodcastRequest request,
             IPodcastService podcastService,
@@ -104,7 +127,7 @@ public static class AdminEndpoints
         .WithDescription("Gọi dịch vụ Azure Text-to-Speech API để chuyển đổi nội dung lời chúc thành file audio phát thanh.");
 
         // 4. Tải lên tệp âm thanh Podcast thủ công (.mp3, .wav, .m4a, .ogg, .aac, .webm)
-        group.MapPost("/podcasts/upload", async Task<Results<Ok<PodcastResponse>, BadRequest<string>>> (
+        protectedGroup.MapPost("/podcasts/upload", async Task<Results<Ok<PodcastResponse>, BadRequest<string>>> (
             IFormFile file,
             [FromForm] string title,
             [FromForm] int? postId,
@@ -139,24 +162,16 @@ public static class AdminEndpoints
             }
             catch (System.Exception ex)
             {
-                return TypedResults.BadRequest($"Lỗi khi tải lên file âm thanh: {ex.Message}");
+                return TypedResults.BadRequest($"Lỗi khi tải lên Podcast: {ex.Message}");
             }
         })
         .DisableAntiforgery()
         .WithName("UploadPodcastAudio")
-        .WithSummary("Tải lên file Podcast thủ công")
-        .WithDescription("Cho phép Ban tổ chức tải lên trực tiếp file âm thanh (.mp3, .wav, .m4a, .aac) tự chuẩn bị hoặc sinh trước ở local.");
-
-        // 5. Endpoint xuất backdrop cũ đã chuyển sang /api/backdrop/*.
-        //    Bản cũ dựng ảnh ngay trong request và bị giao diện gọi hai lần cho
-        //    mỗi lần xem, nên dựng trọn vẹn hai lượt.
-        group.MapGet("/backdrop", () => TypedResults.Redirect("/api/backdrop/preflight", permanent: true))
-        .WithName("ExportBackdropLegacy")
-        .WithSummary("Đã chuyển sang /api/backdrop")
-        .WithDescription("Giữ lại để đường dẫn cũ không gãy; luồng mới đặt job qua POST /api/backdrop/jobs.");
+        .WithSummary("Tải lên tệp âm thanh Podcast thủ công")
+        .WithDescription("Hỗ trợ tải lên file âm thanh MP3/WAV/M4A/AAC/OGG cho số phát thanh Radio IRIS 15.");
 
         // 5. Xóa Podcast đã tạo
-        group.MapDelete("/podcasts/{id:int}", async Task<Results<Ok<string>, NotFound>> (
+        protectedGroup.MapDelete("/podcasts/{id:int}", async Task<Results<Ok<string>, NotFound>> (
             int id,
             IPodcastService podcastService,
             CancellationToken ct) =>
@@ -173,7 +188,7 @@ public static class AdminEndpoints
         .WithDescription("Xóa Podcast khỏi cơ sở dữ liệu SQLite và tệp âm thanh vật lý trên đĩa.");
 
         // 6. Warm-up Modal ViXTTS Container
-        group.MapPost("/tts/warmup", async Task<Results<Ok<object>, ProblemHttpResult>> (
+        protectedGroup.MapPost("/tts/warmup", async Task<Results<Ok<object>, ProblemHttpResult>> (
             IHttpClientFactory httpClientFactory,
             Microsoft.Extensions.Configuration.IConfiguration configuration,
             CancellationToken ct) =>
@@ -228,6 +243,41 @@ public static class AdminEndpoints
         .WithDescription("Gửi request tới /healthz của Modal để đánh thức GPU container từ trạng thái ngủ, tránh timeout 60s khi tạo podcast.");
     }
 }
+
+/// <summary>
+/// Bộ lọc kiểm tra phiên đăng nhập ban tổ chức.
+/// </summary>
+public sealed class AdminAuthFilter(IAdminTokenService tokenService) : IEndpointFilter
+{
+    public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+    {
+        var authHeader = context.HttpContext.Request.Headers["Authorization"].FirstOrDefault();
+        string? token = null;
+
+        if (!string.IsNullOrWhiteSpace(authHeader) && authHeader.StartsWith("Bearer ", System.StringComparison.OrdinalIgnoreCase))
+        {
+            token = authHeader["Bearer ".Length..].Trim();
+        }
+        else
+        {
+            token = context.HttpContext.Request.Headers["X-Admin-Token"].FirstOrDefault();
+        }
+
+        if (!tokenService.ValidateToken(token))
+        {
+            return Results.Json(
+                new { error = "Unauthorized: Phiên đăng nhập ban tổ chức không hợp lệ hoặc đã hết hạn." },
+                statusCode: StatusCodes.Status401Unauthorized);
+        }
+
+        return await next(context);
+    }
+}
+
+/// <summary>
+/// Yêu cầu đăng nhập quản trị.
+/// </summary>
+public sealed record AdminLoginRequest(string Password);
 
 /// <summary>
 /// Yêu cầu duyệt bài viết.

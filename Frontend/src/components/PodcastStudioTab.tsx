@@ -66,7 +66,11 @@ export const PodcastStudioTab: React.FC<PodcastStudioTabProps> = ({
     }, 1000);
 
     try {
-      const res = await fetch('/api/admin/tts/warmup', { method: 'POST' });
+      const token = sessionStorage.getItem('admin_token') || '';
+      const res = await fetch('/api/admin/tts/warmup', {
+        method: 'POST',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      });
       const data = await res.json();
       if (res.ok && data.ready) {
         setGpuStatus('ready');

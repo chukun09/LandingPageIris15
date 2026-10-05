@@ -24,6 +24,11 @@ public class AppDbContext : DbContext
             entity.Property(e => e.OriginalImagePath).IsRequired().HasMaxLength(500);
             entity.Property(e => e.ThumbnailImagePath).IsRequired().HasMaxLength(500);
             entity.Property(e => e.IsPinned).HasDefaultValue(false);
+
+            // Tối ưu hoá truy vấn đọc: Composite Index cho trang chính và duyệt bài
+            entity.HasIndex(e => new { e.IsApproved, e.IsPinned, e.VoteCount, e.CreatedAt });
+            entity.HasIndex(e => new { e.IsApproved, e.CreatedAt });
+            entity.HasIndex(e => e.Department);
         });
 
         modelBuilder.Entity<PodcastEpisode>(entity =>
@@ -31,6 +36,10 @@ public class AppDbContext : DbContext
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Title).IsRequired().HasMaxLength(200);
             entity.Property(e => e.AudioPath).IsRequired().HasMaxLength(500);
+
+            // Tối ưu truy vấn podcast
+            entity.HasIndex(e => e.CreatedAt);
+            entity.HasIndex(e => e.PostId);
         });
     }
 }

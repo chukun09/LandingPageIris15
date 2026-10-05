@@ -129,7 +129,7 @@ class TTSRequest(BaseModel):
     image=vixtts_image,
     gpu="T4",
     timeout=180,
-    scaledown_window=120,
+    scaledown_window=300,
     volumes={"/root/.local/share/tts": tts_volume}
 )
 class ViXttsService:
@@ -198,6 +198,32 @@ class ViXttsService:
             print("Safeguard warning:", e)
 
         print("Đã nạp thành công mô hình viXTTS tiếng Việt vào GPU VRAM!")
+
+        # Khởi động nóng GPU thực tế (Real CUDA Warm-up Inference)
+        # Ép GPU compile sẵn CUDA kernels và nạp trước Speaker Latent vào VRAM
+        try:
+            sample_voice = "/root/voices/default_vietnamese.wav"
+            if not os.path.exists(sample_voice):
+                sample_voice = "/root/.local/share/tts/vixtts/vi_sample.wav"
+
+            if os.path.exists(sample_voice):
+                print("Đang chạy khởi động nóng GPU (CUDA Warmup Inference)...")
+                warmup_wav = "/tmp/warmup_init.wav"
+                self.tts.tts_to_file(
+                    text="Xin chào IRIS.",
+                    speaker_wav=sample_voice,
+                    language="vi",
+                    file_path=warmup_wav,
+                    speed=1.0,
+                    temperature=0.72
+                )
+                if os.path.exists(warmup_wav):
+                    os.remove(warmup_wav)
+                print("GPU CUDA Warmup hoàn tất 100%! Sẵn sàng phục vụ request siêu tốc.")
+            else:
+                print("Bỏ qua warmup: Không tìm thấy file giọng mẫu.")
+        except Exception as ex:
+            print("Lưu ý warmup (không ảnh hưởng):", ex)
 
     @modal.asgi_app()
     def web_endpoint(self):

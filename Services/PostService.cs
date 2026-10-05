@@ -426,12 +426,9 @@ public sealed class PostService : IPostService
                 return cached;
             }
 
-            var posts = await _context.MemoryPosts
+            cached = await _context.MemoryPosts
                 .AsNoTracking()
                 .Where(p => p.IsApproved)
-                .ToListAsync(ct);
-
-            cached = posts
                 .OrderByDescending(p => p.IsPinned)
                 .ThenByDescending(p => p.VoteCount)
                 .ThenByDescending(p => p.CreatedAt)
@@ -443,7 +440,7 @@ public sealed class PostService : IPostService
                     p.VoteCount,
                     p.CreatedAt,
                     p.IsPinned))
-                .ToList();
+                .ToListAsync(ct);
 
             _cache.Set(ApprovedPostsKey, cached, TimeSpan.FromSeconds(10));
             return cached;
@@ -456,13 +453,11 @@ public sealed class PostService : IPostService
 
     public async Task<IReadOnlyList<MemoryPost>> GetPendingPostsAsync(CancellationToken ct)
     {
-        var pending = await _context.MemoryPosts
+        return await _context.MemoryPosts
+            .AsNoTracking()
             .Where(p => !p.IsApproved)
-            .ToListAsync(ct);
-
-        return pending
             .OrderByDescending(p => p.CreatedAt)
-            .ToList();
+            .ToListAsync(ct);
     }
 
     public async Task<bool> ApprovePostAsync(int id, bool approve, CancellationToken ct)
@@ -507,17 +502,18 @@ public sealed class PostService : IPostService
 
     public async Task<bool> VotePostAsync(int id, CancellationToken ct)
     {
-        var post = await _context.MemoryPosts.FindAsync(new object[] { id }, ct);
-        if (post == null || !post.IsApproved) return false;
+        // Thực hiện cập nhật nguyên tử (Atomic Update) trực tiếp trên DB không cần SELECT trước
+        var rowsAffected = await _context.MemoryPosts
+            .Where(p => p.Id == id && p.IsApproved)
+            .ExecuteUpdateAsync(s => s.SetProperty(p => p.VoteCount, p => p.VoteCount + 1), ct);
 
-        post.VoteCount++;
-        await _context.SaveChangesAsync(ct);
+        if (rowsAffected == 0) return false;
 
         // Cập nhật mượt mà trực tiếp trong Cache: KHÔNG xóa cache để tránh hiện tượng Cache Stampede khi nhiều người vote
         if (_cache.TryGetValue(ApprovedPostsKey, out List<PostResponse>? currentList) && currentList != null)
         {
             var updated = currentList
-                .Select(p => p.Id == id ? p with { VoteCount = post.VoteCount } : p)
+                .Select(p => p.Id == id ? p with { VoteCount = p.VoteCount + 1 } : p)
                 .OrderByDescending(p => p.IsPinned)
                 .ThenByDescending(p => p.VoteCount)
                 .ThenByDescending(p => p.CreatedAt)

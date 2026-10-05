@@ -5,10 +5,6 @@ import { MosaicSkeleton } from './components/MosaicSkeleton';
 import { useLazyOnVisible } from './hooks/useLazyOnVisible';
 import { PodcastPlayer } from './components/PodcastPlayer';
 import { MemoryWall } from './components/MemoryWall';
-import { UploadModal } from './components/UploadModal';
-import { AdminPanel } from './components/AdminPanel';
-import { AdminPasswordModal } from './components/AdminPasswordModal';
-import { BackdropViewerModal } from './components/BackdropViewerModal';
 import { ProofFrame } from './components/ProofFrame';
 import { ModalShell } from './components/ModalShell';
 import { ThemeToggle } from './components/ThemeToggle';
@@ -18,8 +14,14 @@ import { CelebrationConfetti, fireCelebration } from './components/CelebrationCo
 import { GalaCountdown } from './components/GalaCountdown';
 import { JourneyTimeline } from './components/JourneyTimeline';
 import { DepartmentLeaderboard } from './components/DepartmentLeaderboard';
-import { MemoryCardExportModal } from './components/MemoryCardExportModal';
-import { GalaStageMode } from './components/GalaStageMode';
+
+// Code-split các modal và chế độ trình chiếu nặng để giảm kích thước bundle nạp ban đầu
+const UploadModal = lazy(() => import('./components/UploadModal').then(m => ({ default: m.UploadModal })));
+const AdminPanel = lazy(() => import('./components/AdminPanel').then(m => ({ default: m.AdminPanel })));
+const AdminPasswordModal = lazy(() => import('./components/AdminPasswordModal').then(m => ({ default: m.AdminPasswordModal })));
+const BackdropViewerModal = lazy(() => import('./components/BackdropViewerModal').then(m => ({ default: m.BackdropViewerModal })));
+const MemoryCardExportModal = lazy(() => import('./components/MemoryCardExportModal').then(m => ({ default: m.MemoryCardExportModal })));
+const GalaStageMode = lazy(() => import('./components/GalaStageMode').then(m => ({ default: m.GalaStageMode })));
 
 interface Post {
   id: number;
@@ -58,7 +60,6 @@ function App() {
   const [approvedPosts, setApprovedPosts] = useState<Post[]>([]);
   const [pendingPosts, setPendingPosts] = useState<Post[]>([]);
   const [podcasts, setPodcasts] = useState<Podcast[]>([]);
-  const [realDurations, setRealDurations] = useState<Record<number, number>>({});
 
   // Selected states
   const [currentPodcastIndex, setCurrentPodcastIndex] = useState(-1);
@@ -77,9 +78,26 @@ function App() {
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [isBackdropViewerOpen, setIsBackdropViewerOpen] = useState(false);
+  const [adminToken, setAdminToken] = useState<string>(() => sessionStorage.getItem('admin_token') || '');
 
   // Notification Toast state
   const [toast, setToast] = useState<ToastNotification | null>(null);
+
+  const getAdminHeaders = (extraHeaders: Record<string, string> = {}) => {
+    const token = adminToken || sessionStorage.getItem('admin_token') || '';
+    return {
+      ...extraHeaders,
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    };
+  };
+
+  const handleAuthExpired = () => {
+    sessionStorage.removeItem('admin_token');
+    setAdminToken('');
+    setIsAdminPanelOpen(false);
+    setIsPasswordModalOpen(true);
+    setToast({ message: 'Phiên làm việc ban tổ chức đã hết hạn. Vui lòng nhập lại mật khẩu.', type: 'error' });
+  };
 
   // Hoãn mount khu vực 3D cho tới khi nó sắp lọt vào khung nhìn.
   const { ref: mosaicRef, visible: mosaicVisible } = useLazyOnVisible<HTMLDivElement>({
@@ -112,7 +130,13 @@ function App() {
 
   const fetchPending = async () => {
     try {
-      const res = await fetch('/api/admin/posts/pending');
+      const res = await fetch('/api/admin/posts/pending', {
+        headers: getAdminHeaders(),
+      });
+      if (res.status === 401) {
+        handleAuthExpired();
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
         setPendingPosts(data);
@@ -126,23 +150,7 @@ function App() {
     fetchData();
   }, []);
 
-  useEffect(() => {
-    podcasts.forEach((p) => {
-      if (p.audioUrl && !realDurations[p.id]) {
-        const audio = new Audio();
-        audio.preload = 'metadata';
-        audio.src = p.audioUrl;
-        audio.onloadedmetadata = () => {
-          if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
-            const actualSec = Math.round(audio.duration);
-            if (actualSec > 0) {
-              setRealDurations((prev) => ({ ...prev, [p.id]: actualSec }));
-            }
-          }
-        };
-      }
-    });
-  }, [podcasts]);
+
 
   useEffect(() => {
     if (isAdminPanelOpen) {
@@ -153,6 +161,24 @@ function App() {
   const triggerToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4000);
+  };
+
+  const parseApiError = async (res: Response, fallback: string): Promise<string> => {
+    try {
+      const text = await res.text();
+      if (!text) return fallback;
+      if (text.startsWith('"') && text.endsWith('"')) {
+        return JSON.parse(text);
+      }
+      try {
+        const json = JSON.parse(text);
+        return json.error || json.detail || json.message || text;
+      } catch {
+        return text;
+      }
+    } catch {
+      return fallback;
+    }
   };
 
   const handleVote = async (id: number) => {
@@ -169,7 +195,8 @@ function App() {
         fireCelebration();
         triggerToast('Cảm ơn bạn đã thả tim bình chọn!', 'success');
       } else {
-        triggerToast('Lỗi khi bình chọn.', 'error');
+        const errMsg = await parseApiError(res, 'Lỗi khi bình chọn.');
+        triggerToast(errMsg, 'error');
       }
     } catch {
       triggerToast('Không thể kết nối đến máy chủ.', 'error');
@@ -190,8 +217,8 @@ function App() {
         fetchPending();
         return true;
       } else {
-        const errText = await res.text();
-        triggerToast(errText || 'Tải lên thất bại. Vui lòng kiểm tra lại.', 'error');
+        const errText = await parseApiError(res, 'Tải lên thất bại. Vui lòng kiểm tra lại.');
+        triggerToast(errText, 'error');
         return false;
       }
     } catch {
@@ -204,9 +231,13 @@ function App() {
     try {
       const res = await fetch(`/api/admin/posts/${id}/approve`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAdminHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ approve }),
       });
+      if (res.status === 401) {
+        handleAuthExpired();
+        return;
+      }
       if (res.ok) {
         triggerToast(approve ? 'Đã duyệt đăng kỷ niệm thành công!' : 'Đã xóa bài viết khỏi hàng đợi.');
         fetchPending();
@@ -223,9 +254,13 @@ function App() {
     try {
       const res = await fetch(`/api/admin/posts/${id}/pin`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAdminHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ isPinned }),
       });
+      if (res.status === 401) {
+        handleAuthExpired();
+        return;
+      }
       if (res.ok) {
         setApprovedPosts(prev =>
           prev.map(p => p.id === id ? { ...p, isPinned: isPinned ?? !p.isPinned } : p)
@@ -243,9 +278,13 @@ function App() {
   const handleGeneratePodcast = async (id: number, title: string, apiKey: string, region: string) => {
     const res = await fetch(`/api/admin/posts/${id}/podcast`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAdminHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ title, apiKey, region }),
     });
+    if (res.status === 401) {
+      handleAuthExpired();
+      throw new Error('Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.');
+    }
     if (!res.ok) {
       const errText = await res.text();
       throw new Error(errText || 'Thất bại khi yêu cầu máy chủ tạo âm thanh.');
@@ -256,8 +295,13 @@ function App() {
   const handleUploadPodcast = async (formData: FormData) => {
     const res = await fetch('/api/admin/podcasts/upload', {
       method: 'POST',
+      headers: getAdminHeaders(),
       body: formData,
     });
+    if (res.status === 401) {
+      handleAuthExpired();
+      throw new Error('Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.');
+    }
     if (!res.ok) {
       const errText = await res.text();
       throw new Error(errText || 'Thất bại khi tải file âm thanh lên máy chủ.');
@@ -267,7 +311,14 @@ function App() {
   };
 
   const handleDeletePodcast = async (id: number) => {
-    const res = await fetch(`/api/admin/podcasts/${id}`, { method: 'DELETE' });
+    const res = await fetch(`/api/admin/podcasts/${id}`, {
+      method: 'DELETE',
+      headers: getAdminHeaders(),
+    });
+    if (res.status === 401) {
+      handleAuthExpired();
+      throw new Error('Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.');
+    }
     if (!res.ok) {
       const errText = await res.text();
       throw new Error(errText || 'Thất bại khi xóa số phát thanh Podcast.');
@@ -337,7 +388,15 @@ function App() {
               <Plus className="w-4 h-4" /> <span className="hidden sm:inline">Gửi kỷ niệm</span>
             </motion.button>
             <motion.button
-              onClick={() => setIsPasswordModalOpen(true)}
+              onClick={() => {
+                const token = adminToken || sessionStorage.getItem('admin_token');
+                if (token) {
+                  setIsAdminPanelOpen(true);
+                  fetchPending();
+                } else {
+                  setIsPasswordModalOpen(true);
+                }
+              }}
               className="flex items-center gap-1.5 bg-brand-surface hover:bg-brand-surfaceHover border border-brand-border text-brand-textSecondary hover:text-brand-textPrimary font-bold text-xs px-3 py-2.5 rounded-xl active:scale-95 transition-all"
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.94 }}
@@ -524,7 +583,7 @@ function App() {
                           <span className="text-xs font-bold truncate block" title={pod.title}>{pod.title}</span>
                           <span className="text-[10px] text-brand-textMuted font-fira">
                             {(() => {
-                              const sec = realDurations[pod.id] || pod.durationSeconds;
+                              const sec = pod.durationSeconds || 0;
                               return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
                             })()}
                           </span>
@@ -676,53 +735,80 @@ function App() {
         )}
       </ModalShell>
 
-      <UploadModal
-        isOpen={isUploadModalOpen}
-        onClose={() => setIsUploadModalOpen(false)}
-        onSubmit={handleUploadSubmit}
-      />
+      <Suspense fallback={null}>
+        {isUploadModalOpen && (
+          <UploadModal
+            isOpen={isUploadModalOpen}
+            onClose={() => setIsUploadModalOpen(false)}
+            onSubmit={handleUploadSubmit}
+          />
+        )}
+      </Suspense>
 
-      <AdminPanel
-        isOpen={isAdminPanelOpen}
-        onClose={() => setIsAdminPanelOpen(false)}
-        pendingPosts={pendingPosts}
-        approvedPosts={approvedPosts}
-        podcasts={podcasts}
-        onApprove={handleApprovePost}
-        onTogglePin={handleTogglePin}
-        onGeneratePodcast={handleGeneratePodcast}
-        onUploadPodcast={handleUploadPodcast}
-        onDeletePodcast={handleDeletePodcast}
-        onOpenBackdropViewer={() => setIsBackdropViewerOpen(true)}
-      />
+      <Suspense fallback={null}>
+        {isAdminPanelOpen && (
+          <AdminPanel
+            isOpen={isAdminPanelOpen}
+            onClose={() => setIsAdminPanelOpen(false)}
+            pendingPosts={pendingPosts}
+            approvedPosts={approvedPosts}
+            podcasts={podcasts}
+            onApprove={handleApprovePost}
+            onTogglePin={handleTogglePin}
+            onGeneratePodcast={handleGeneratePodcast}
+            onUploadPodcast={handleUploadPodcast}
+            onDeletePodcast={handleDeletePodcast}
+            onOpenBackdropViewer={() => setIsBackdropViewerOpen(true)}
+          />
+        )}
+      </Suspense>
 
-      <BackdropViewerModal
-        isOpen={isBackdropViewerOpen}
-        onClose={() => setIsBackdropViewerOpen(false)}
-      />
+      <Suspense fallback={null}>
+        {isBackdropViewerOpen && (
+          <BackdropViewerModal
+            isOpen={isBackdropViewerOpen}
+            onClose={() => setIsBackdropViewerOpen(false)}
+          />
+        )}
+      </Suspense>
 
-      <AdminPasswordModal
-        isOpen={isPasswordModalOpen}
-        onClose={() => setIsPasswordModalOpen(false)}
-        onSuccess={() => setIsAdminPanelOpen(true)}
-      />
+      <Suspense fallback={null}>
+        {isPasswordModalOpen && (
+          <AdminPasswordModal
+            isOpen={isPasswordModalOpen}
+            onClose={() => setIsPasswordModalOpen(false)}
+            onSuccess={(token: string) => {
+              setAdminToken(token);
+              setIsAdminPanelOpen(true);
+            }}
+          />
+        )}
+      </Suspense>
 
       {/* Hiệu ứng Pháo hoa Confetti toàn màn hình */}
       <CelebrationConfetti />
 
       {/* Modal xuất thiệp kỷ niệm cá nhân */}
-      <MemoryCardExportModal
-        isOpen={!!exportPostCard}
-        post={exportPostCard}
-        onClose={() => setExportPostCard(null)}
-      />
+      <Suspense fallback={null}>
+        {!!exportPostCard && (
+          <MemoryCardExportModal
+            isOpen={!!exportPostCard}
+            post={exportPostCard}
+            onClose={() => setExportPostCard(null)}
+          />
+        )}
+      </Suspense>
 
       {/* Chế độ Sân khấu Gala Presentation Mode */}
-      <GalaStageMode
-        isOpen={isStageModeOpen}
-        posts={approvedPosts}
-        onClose={() => setIsStageModeOpen(false)}
-      />
+      <Suspense fallback={null}>
+        {isStageModeOpen && (
+          <GalaStageMode
+            isOpen={isStageModeOpen}
+            posts={approvedPosts}
+            onClose={() => setIsStageModeOpen(false)}
+          />
+        )}
+      </Suspense>
 
       {/* Toast */}
       <AnimatePresence>

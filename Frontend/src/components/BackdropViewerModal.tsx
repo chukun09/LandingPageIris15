@@ -200,8 +200,10 @@ export function BackdropViewerModal({ isOpen, onClose }: Props) {
       setScale(1);
       stopPolling();
       try {
+        const token = sessionStorage.getItem('admin_token') || '';
         const res = await fetch(`/api/backdrop/jobs?theme=${theme}&force=${force ? 'true' : 'false'}`, {
           method: 'POST',
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const created: BackdropJob = await res.json();

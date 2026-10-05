@@ -159,6 +159,7 @@ public static class BackdropEndpoints
 
             return TypedResults.Accepted($"/api/backdrop/jobs/{job.Id}", ToResponse(job));
         })
+        .AddEndpointFilter<AdminAuthFilter>()
         .WithName("CreateBackdropJob")
         .WithSummary("Đặt yêu cầu dựng file in")
         .WithDescription("Trả 202 kèm jobId; nếu đã có file khớp bố cục và thông số thì trả 200 ngay.");

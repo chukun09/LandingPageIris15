@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Lock, X, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { Lock, X, Eye, EyeOff, AlertCircle, Loader2 } from 'lucide-react';
 import { ModalShell } from './ModalShell';
 
 interface AdminPasswordModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (token: string) => void;
 }
 
 export const AdminPasswordModal: React.FC<AdminPasswordModalProps> = ({
@@ -18,25 +18,46 @@ export const AdminPasswordModal: React.FC<AdminPasswordModalProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [isShaking, setIsShaking] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       setPassword('');
       setErrorMsg('');
       setIsShaking(false);
+      setIsLoading(false);
     }
   }, [isOpen]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMsg('');
+    if (!password.trim() || isLoading) return;
 
-    if (password === 'iris2026@@') {
-      onSuccess();
-      onClose();
-    } else {
-      setErrorMsg('Mật khẩu quản trị không chính xác!');
+    setErrorMsg('');
+    setIsLoading(true);
+
+    try {
+      const res = await fetch('/api/admin/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        sessionStorage.setItem('admin_token', data.token);
+        onSuccess(data.token);
+        onClose();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setErrorMsg(err.error || 'Mật khẩu quản trị không chính xác!');
+        setIsShaking(true);
+      }
+    } catch {
+      setErrorMsg('Không thể kết nối đến máy chủ. Vui lòng thử lại.');
       setIsShaking(true);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -78,6 +99,7 @@ export const AdminPasswordModal: React.FC<AdminPasswordModalProps> = ({
               onChange={(e) => setPassword(e.target.value)}
               className="input-themed w-full pl-3 pr-10 py-2.5 text-xs"
               autoFocus
+              disabled={isLoading}
             />
             <button
               type="button"
@@ -108,16 +130,19 @@ export const AdminPasswordModal: React.FC<AdminPasswordModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2 border border-brand-border hover:bg-brand-surface text-brand-textSecondary font-bold text-xs rounded-xl transition-colors"
+              disabled={isLoading}
+              className="flex-1 py-2 border border-brand-border hover:bg-brand-surface text-brand-textSecondary font-bold text-xs rounded-xl transition-colors disabled:opacity-50"
             >
               Hủy bỏ
             </button>
             <motion.button
               type="submit"
-              className="flex-1 py-2 bg-brand-primary hover:brightness-110 text-white font-bold text-xs rounded-xl transition-all shadow-md"
+              disabled={isLoading}
+              className="flex-1 py-2 bg-brand-primary hover:brightness-110 text-white font-bold text-xs rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50"
               whileTap={{ scale: 0.95 }}
             >
-              Xác nhận
+              {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              <span>{isLoading ? 'Đang xác thực...' : 'Xác nhận'}</span>
             </motion.button>
           </div>
         </form>

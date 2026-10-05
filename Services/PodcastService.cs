@@ -60,11 +60,8 @@ public sealed class PodcastService : IPodcastService
                 return cached;
             }
 
-            var episodes = await _context.PodcastEpisodes
+            cached = await _context.PodcastEpisodes
                 .AsNoTracking()
-                .ToListAsync(ct);
-
-            cached = episodes
                 .OrderByDescending(p => p.CreatedAt)
                 .Select(p => new PodcastResponse(
                     p.Id,
@@ -73,7 +70,7 @@ public sealed class PodcastService : IPodcastService
                     p.AudioPath,
                     p.DurationSeconds,
                     p.CreatedAt))
-                .ToList();
+                .ToListAsync(ct);
 
             _cache.Set(PodcastsCacheKey, cached, TimeSpan.FromMinutes(30));
             return cached;

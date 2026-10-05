@@ -18,10 +18,12 @@ public static class PodcastEndpoints
 
         // 1. Lấy danh sách các số phát sóng Podcast hàng ngày
         group.MapGet("/", async Task<Ok<IReadOnlyList<PodcastResponse>>> (
+            HttpContext httpContext,
             IPodcastService podcastService,
             CancellationToken ct) =>
         {
             var podcasts = await podcastService.GetPodcastsAsync(ct);
+            httpContext.Response.Headers.CacheControl = "public, max-age=60, stale-while-revalidate=120";
             return TypedResults.Ok(podcasts);
         })
         .WithName("GetPodcasts")

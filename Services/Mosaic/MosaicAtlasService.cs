@@ -58,6 +58,7 @@ public sealed class MosaicAtlasService(
     private static readonly int[] AllowedTileSizes = [32, 64, 128, 256];
 
     private readonly ConcurrentDictionary<string, MosaicAtlas> _cache = new();
+    private static readonly SemaphoreSlim _buildLock = new(1, 1);
 
     public async Task<MosaicAtlas> GetAsync(int tileSize, CancellationToken ct)
     {
@@ -83,12 +84,22 @@ public sealed class MosaicAtlasService(
         var key = BuildKey(tileSize, ordered);
         if (_cache.TryGetValue(key, out var cached)) return cached;
 
-        var thumbnails = await postService.GetThumbnailPathsAsync(ct);
-        var atlas = await BuildAsync(tileSize, ordered, thumbnails, key, ct);
+        await _buildLock.WaitAsync(ct);
+        try
+        {
+            if (_cache.TryGetValue(key, out cached)) return cached;
 
-        if (_cache.Count > 8) _cache.Clear();
-        _cache[key] = atlas;
-        return atlas;
+            var thumbnails = await postService.GetThumbnailPathsAsync(ct);
+            var atlas = await BuildAsync(tileSize, ordered, thumbnails, key, ct);
+
+            if (_cache.Count > 8) _cache.Clear();
+            _cache[key] = atlas;
+            return atlas;
+        }
+        finally
+        {
+            _buildLock.Release();
+        }
     }
 
     private async Task<MosaicAtlas> BuildAsync(

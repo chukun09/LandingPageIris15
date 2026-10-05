@@ -63,6 +63,13 @@ public sealed class BackdropJobWorker(
                 job.Stage = "Thất bại";
                 logger.LogError(ex, "Dựng backdrop thất bại cho job {JobId}", job.Id);
             }
+            finally
+            {
+                // Sau khi hoàn thành hoặc thất bại việc dựng backdrop lớn (chiếm hàng trăm MB RAM),
+                // chủ động kích hoạt GC dọn dẹp bộ nhớ Gen 2 và Large Object Heap để giải phóng ngay RAM về cho Linux OS / Render.
+                GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+                GC.WaitForPendingFinalizers();
+            }
         }
     }
 }

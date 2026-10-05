@@ -84,6 +84,7 @@ public sealed class CloudflareR2StorageService : IStorageService, IDisposable
                     ContentType = contentType,
                     DisablePayloadSigning = true
                 };
+                putRequest.Headers["Cache-Control"] = "public, max-age=31536000, immutable";
 
                 await _s3Client.PutObjectAsync(putRequest, ct);
                 _logger.LogInformation("Đã tải file lên Cloudflare R2 thành công: {Key}", normalizedKey);
