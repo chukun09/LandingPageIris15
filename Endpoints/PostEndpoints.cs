@@ -128,6 +128,23 @@ public static class PostEndpoints
         .WithName("GetPostThumbnail")
         .WithSummary("Proxy ảnh thu nhỏ cùng domain để tránh lỗi CORS khi vẽ lên canvas");
 
+        // 2c. Ảnh xem trước giữ nguyên tỉ lệ gốc (không crop vuông như thumbnail), đã nén lại
+        // kích thước để modal xem chi tiết và thiệp lưu niệm tải nhanh, đỡ lag trên di động.
+        group.MapGet("/{id:int}/preview", async Task<Results<FileStreamHttpResult, NotFound>> (
+            int id,
+            HttpContext httpContext,
+            IPostService postService,
+            CancellationToken ct) =>
+        {
+            var stream = await postService.GetPreviewStreamAsync(id, ct);
+            if (stream == null) return TypedResults.NotFound();
+
+            httpContext.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+            return TypedResults.Stream(stream, "image/jpeg");
+        })
+        .WithName("GetPostPreview")
+        .WithSummary("Ảnh xem trước giữ tỉ lệ gốc, đã nén lại cho modal chi tiết và thiệp lưu niệm");
+
         // 3. CBNV thả tim bình chọn bài viết (Anti-Cheat Vote Guard)
         group.MapPost("/{id:int}/vote", async Task<Results<Ok<string>, BadRequest<string>, NotFound>> (
             int id,

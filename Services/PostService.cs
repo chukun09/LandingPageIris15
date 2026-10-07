@@ -670,6 +670,31 @@ public sealed class PostService : IPostService
         return await _storageService.GetFileStreamAsync(path, ct);
     }
 
+    public async Task<Stream?> GetPreviewStreamAsync(int id, CancellationToken ct)
+    {
+        if (_storageService == null) return null;
+
+        var paths = await GetOriginalPathsAsync(ct);
+        if (!paths.TryGetValue(id, out var path) || string.IsNullOrWhiteSpace(path)) return null;
+
+        using var originalStream = await _storageService.GetFileStreamAsync(path, ct);
+        if (originalStream == null) return null;
+
+        // Giữ nguyên tỉ lệ ảnh gốc (không crop), chỉ nén lại kích thước tối đa
+        // 1600px để modal xem chi tiết và thiệp lưu niệm tải nhanh, đỡ lag.
+        using var image = await Image.LoadAsync(_imagePolicy.Configuration, originalStream, ct);
+        image.Mutate(x => x.Resize(new ResizeOptions
+        {
+            Size = new Size(1600, 1600),
+            Mode = ResizeMode.Max
+        }));
+
+        var previewStream = new MemoryStream();
+        await image.SaveAsJpegAsync(previewStream, new SixLabors.ImageSharp.Formats.Jpeg.JpegEncoder { Quality = 82 }, ct);
+        previewStream.Position = 0;
+        return previewStream;
+    }
+
     public async Task<IReadOnlyDictionary<int, string>> GetOriginalPathsAsync(CancellationToken ct)
     {
         if (_cache.TryGetValue(OriginalPathsKey, out IReadOnlyDictionary<int, string>? cached) && cached != null)

@@ -657,7 +657,7 @@ function App() {
             {/* Image viewport with border-glow on dark */}
             <div className="w-full aspect-video bg-brand-surface border border-brand-border/60 dark:border-brand-secondary/15 rounded-2xl overflow-hidden mt-4 shadow-sm">
               <img
-                src={activePostDetail.thumbnailUrl || activePostDetail.thumbnailImagePath}
+                src={`/api/posts/${activePostDetail.id}/preview`}
                 alt="Memory Detail"
                 className="w-full h-full object-contain"
                 onError={(e) => {

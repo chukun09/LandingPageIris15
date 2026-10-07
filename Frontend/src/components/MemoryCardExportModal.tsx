@@ -122,9 +122,10 @@ export const MemoryCardExportModal: React.FC<MemoryCardExportModalProps> = ({
     // 4. Vẽ ảnh kỷ niệm
     const photoImg = new Image();
     photoImg.crossOrigin = 'anonymous';
-    // Luôn đi qua proxy same-origin của backend: ảnh gốc có thể nằm trên Cloudflare R2
-    // (domain khác), tải trực tiếp với crossOrigin sẽ bị CORS chặn khi vẽ lên canvas.
-    const photoUrl = `/api/posts/${post.id}/thumbnail`;
+    // Dùng ảnh preview (giữ tỉ lệ gốc, không crop vuông như thumbnail) qua proxy same-origin:
+    // ảnh gốc có thể nằm trên Cloudflare R2 (domain khác), tải trực tiếp với crossOrigin sẽ
+    // bị CORS chặn khi vẽ lên canvas.
+    const photoUrl = `/api/posts/${post.id}/preview`;
 
     const drawRemainingContent = () => {
       // Khung ảnh

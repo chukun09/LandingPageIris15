@@ -23,6 +23,9 @@ public interface IPostService
     /// <summary>Luồng dữ liệu ảnh thu nhỏ của một bài, dùng để proxy same-origin (tránh lỗi CORS khi ảnh lưu trên R2).</summary>
     Task<Stream?> GetThumbnailStreamAsync(int id, CancellationToken ct);
 
+    /// <summary>Luồng ảnh xem trước giữ nguyên tỉ lệ gốc (không crop), đã nén lại cho modal chi tiết và thiệp lưu niệm.</summary>
+    Task<Stream?> GetPreviewStreamAsync(int id, CancellationToken ct);
+
     /// <summary>Đường dẫn web tới ảnh GỐC của từng bài đã duyệt — chỉ dùng cho bản in.</summary>
     Task<IReadOnlyDictionary<int, string>> GetOriginalPathsAsync(CancellationToken ct);
 
