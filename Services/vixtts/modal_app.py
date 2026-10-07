@@ -105,8 +105,8 @@ def normalize_vietnamese_text(text: str) -> str:
 
     # 4. Thương hiệu & thuật ngữ tiếng Anh thông dụng (không phân biệt hoa thường, không dùng gạch nối)
     case_insensitive = [
-        (r'\bIRIS TECH\b', 'Ai rít Tếch'),
-        (r'\bIRIS\b', 'Ai rít'),
+        (r'\bIRIS TECH\b', 'Iris Tech'),
+        (r'\bIRIS\b', 'Iris'),
         (r'\bTeambuilding\b', 'Tim bin đing'),
         (r'\bGala Dinner\b', 'Ga la Đin nơ'),
         (r'\bGala\b', 'Ga la'),
