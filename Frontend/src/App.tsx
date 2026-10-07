@@ -372,12 +372,12 @@ function App() {
             <ThemeToggle />
             <motion.button
               onClick={() => setIsStageModeOpen(true)}
-              className="flex items-center gap-1.5 bg-brand-surface hover:bg-brand-surfaceHover border border-brand-secondary/40 text-brand-secondary font-bold text-xs px-3 py-2.5 rounded-xl active:scale-95 transition-all shadow-sm"
+              className="hidden sm:flex items-center gap-1.5 bg-brand-surface hover:bg-brand-surfaceHover border border-brand-secondary/40 text-brand-secondary font-bold text-xs px-3 py-2.5 rounded-xl active:scale-95 transition-all shadow-sm"
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.94 }}
               title="Bật chế độ trình chiếu toàn màn hình cho màn LED sân khấu"
             >
-              <Tv className="w-4 h-4 text-amber-500" /> <span className="hidden sm:inline">Chế độ Sân khấu</span>
+              <Tv className="w-4 h-4 text-amber-500" /> <span className="hidden md:inline">Chế độ Sân khấu</span>
             </motion.button>
             <motion.button
               onClick={() => setIsUploadModalOpen(true)}
@@ -453,7 +453,7 @@ function App() {
               </motion.button>
               <button
                 onClick={() => setIsStageModeOpen(true)}
-                className="text-[11px] font-semibold text-amber-500 hover:text-amber-400 border border-amber-500/40 hover:border-amber-400 px-3.5 py-2.5 rounded-md transition-colors bg-brand-card flex items-center gap-1.5"
+                className="hidden sm:flex text-[11px] font-semibold text-amber-500 hover:text-amber-400 border border-amber-500/40 hover:border-amber-400 px-3.5 py-2.5 rounded-md transition-colors bg-brand-card items-center gap-1.5"
                 title="Chiếu toàn màn hình cho màn LED sân khấu sự kiện"
               >
                 <Tv className="w-3.5 h-3.5" /> Sân khấu Gala

@@ -65,32 +65,32 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
       </div>
 
       {/* Header sân khấu */}
-      <header className="relative z-10 p-6 md:p-8 flex items-center justify-between border-b border-white/10 bg-slate-950/60 backdrop-blur-md">
-        <div className="flex items-center gap-4">
-          <div className="bg-white/95 rounded-xl px-3 py-1.5 shadow-md">
+      <header className="relative z-10 p-3 sm:p-6 md:p-8 flex items-center justify-between gap-3 border-b border-white/10 bg-slate-950/60 backdrop-blur-md">
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+          <div className="bg-white/95 rounded-xl px-2 py-1 sm:px-3 sm:py-1.5 shadow-md shrink-0">
             <img
               src="/LOGO 15th IRIS - FINAL _LOGO 15th IRIS - CHOT2.png"
               alt="15th IRIS"
-              className="h-10 md:h-12 w-auto object-contain"
+              className="h-7 sm:h-10 md:h-12 w-auto object-contain"
             />
           </div>
-          <div>
-            <span className="text-[11px] font-mono tracking-widest text-amber-400 font-bold uppercase block">
+          <div className="min-w-0">
+            <span className="text-[9px] sm:text-[11px] font-mono tracking-widest text-amber-400 font-bold uppercase hidden sm:block">
               CHẾ ĐỘ SÂN KHẤU · ĐẠI LỄ KỶ NIỆM 15 NĂM
             </span>
-            <h1 className="text-base md:text-xl font-black text-white">
+            <h1 className="text-sm sm:text-base md:text-xl font-black text-white leading-tight truncate">
               Vinh Danh Những Mảnh Ghép Kỳ Tích
             </h1>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <span className="font-mono text-xs text-white/60 bg-white/10 px-3 py-1.5 rounded-lg border border-white/10">
-            {currentIndex + 1} / {posts.length} KỶ NIỆM
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          <span className="font-mono text-[10px] sm:text-xs text-white/60 bg-white/10 px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg border border-white/10 whitespace-nowrap">
+            {currentIndex + 1}/{posts.length}
           </span>
           <button
             onClick={onClose}
-            className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
+            className="p-2 sm:p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
             title="Thoát chế độ sân khấu (Esc)"
           >
             <X className="w-5 h-5" />
@@ -99,7 +99,7 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
       </header>
 
       {/* Khu vực trình chiếu chính (Ken Burns Effect) */}
-      <main className="relative z-10 flex-1 flex items-center justify-center p-6 md:p-12">
+      <main className="relative z-10 flex-1 flex items-center justify-center p-3 sm:p-6 md:p-12 overflow-y-auto">
         <AnimatePresence mode="wait">
           {activePost && (
             <motion.div
@@ -108,10 +108,10 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 1.05 }}
               transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
-              className="max-w-5xl w-full grid grid-cols-1 md:grid-cols-12 gap-8 items-center bg-slate-900/80 border border-amber-500/30 rounded-3xl p-6 md:p-10 shadow-2xl backdrop-blur-xl"
+              className="max-w-5xl w-full grid grid-cols-1 md:grid-cols-12 gap-4 sm:gap-6 md:gap-8 items-center bg-slate-900/80 border border-amber-500/30 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-10 shadow-2xl backdrop-blur-xl"
             >
               {/* Cột ảnh với hiệu ứng zoom nghệ thuật */}
-              <div className="md:col-span-6 aspect-[4/3] rounded-2xl overflow-hidden border border-amber-500/40 relative shadow-lg">
+              <div className="md:col-span-6 aspect-[4/3] rounded-xl sm:rounded-2xl overflow-hidden border border-amber-500/40 relative shadow-lg">
                 <motion.img
                   src={activePost.thumbnailUrl || activePost.thumbnailImagePath}
                   alt="Kỷ niệm"
@@ -119,33 +119,33 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
                   animate={{ scale: [1, 1.08] }}
                   transition={{ duration: 7, ease: 'linear' }}
                 />
-                <div className="absolute top-3 left-3 bg-amber-500 text-slate-950 font-black text-xs px-3 py-1 rounded-full shadow">
+                <div className="absolute top-2 left-2 sm:top-3 sm:left-3 bg-amber-500 text-slate-950 font-black text-[10px] sm:text-xs px-2.5 py-1 sm:px-3 rounded-full shadow">
                   {activePost.department || 'Đại gia đình IRIS'}
                 </div>
               </div>
 
               {/* Cột nội dung lời chúc */}
-              <div className="md:col-span-6 space-y-6">
-                <div className="space-y-2">
+              <div className="md:col-span-6 space-y-4 sm:space-y-6">
+                <div className="space-y-1.5 sm:space-y-2">
                   <div className="flex items-center gap-2 text-amber-400">
-                    <Sparkles className="w-5 h-5" />
-                    <span className="text-xs font-mono font-bold tracking-wider">
+                    <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
+                    <span className="text-[10px] sm:text-xs font-mono font-bold tracking-wider">
                       MẢNH GHÉP SỐ #{activePost.id}
                     </span>
                   </div>
-                  <h2 className="text-xl md:text-2xl font-black text-white leading-tight">
+                  <h2 className="text-lg sm:text-xl md:text-2xl font-black text-white leading-tight">
                     Lời Chúc Tri Ân 15 Năm
                   </h2>
                 </div>
 
-                <div className="relative pl-6 border-l-2 border-amber-500/50">
-                  <span className="absolute -top-3 -left-3 text-5xl text-amber-400/20 font-serif">“</span>
-                  <p className="text-base md:text-xl text-slate-200 leading-relaxed italic font-serif whitespace-pre-line">
+                <div className="relative pl-5 sm:pl-6 border-l-2 border-amber-500/50">
+                  <span className="absolute -top-2 -left-2 sm:-top-3 sm:-left-3 text-4xl sm:text-5xl text-amber-400/20 font-serif">“</span>
+                  <p className="text-sm sm:text-base md:text-xl text-slate-200 leading-relaxed italic font-serif whitespace-pre-line">
                     {activePost.message}
                   </p>
                 </div>
 
-                <div className="flex items-center justify-between pt-4 border-t border-white/10 text-xs text-white/60 font-mono">
+                <div className="flex items-center justify-between pt-3 sm:pt-4 border-t border-white/10 text-[10px] sm:text-xs text-white/60 font-mono">
                   <div className="flex items-center gap-2">
                     <Award className="w-4 h-4 text-amber-400" />
                     <span>IRIS 15 Years of Pride</span>
@@ -159,18 +159,18 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
       </main>
 
       {/* Thanh điều khiển dưới đáy */}
-      <footer className="relative z-10 p-4 md:p-6 flex items-center justify-between border-t border-white/10 bg-slate-950/60 backdrop-blur-md">
-        <div className="flex items-center gap-2">
+      <footer className="relative z-10 p-3 sm:p-4 md:p-6 flex items-center justify-between gap-3 border-t border-white/10 bg-slate-950/60 backdrop-blur-md">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <button
             onClick={() => setCurrentIndex((p) => (p - 1 + posts.length) % posts.length)}
-            className="p-3 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
+            className="p-2.5 sm:p-3 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
             title="Trước"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
           <button
             onClick={() => setIsPlaying((p) => !p)}
-            className="p-3 rounded-xl bg-amber-500 text-white hover:bg-amber-400 font-bold transition-colors flex items-center gap-2 shadow-sm"
+            className="p-2.5 sm:p-3 rounded-xl bg-amber-500 text-white hover:bg-amber-400 font-bold transition-colors flex items-center gap-2 shadow-sm"
           >
             {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
             <span className="text-xs font-mono hidden sm:inline">
@@ -179,7 +179,7 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
           </button>
           <button
             onClick={() => setCurrentIndex((p) => (p + 1) % posts.length)}
-            className="p-3 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
+            className="p-2.5 sm:p-3 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
             title="Sau"
           >
             <ChevronRight className="w-5 h-5" />
@@ -199,7 +199,7 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
           </div>
         </div>
 
-        <span className="text-[11px] text-white/50 font-mono">
+        <span className="text-[10px] sm:text-[11px] text-white/50 font-mono hidden sm:block text-right">
           Nhấn Phím Cách để Dừng/Chạy · Phím Mũi tên để Chuyển ảnh
         </span>
       </footer>
