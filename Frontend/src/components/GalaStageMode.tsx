@@ -8,6 +8,7 @@ interface Post {
   department: string;
   thumbnailImagePath?: string;
   thumbnailUrl?: string;
+  previewUrl?: string;
   voteCount: number;
   createdAt: string;
   isPinned?: boolean;
@@ -25,6 +26,11 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
 
   const activePost = posts[currentIndex] || null;
 
+  const getPostImageUrl = (post: Post | null): string => {
+    if (!post) return '';
+    return post.previewUrl || `/api/posts/${post.id}/preview`;
+  };
+
   useEffect(() => {
     if (!isOpen || !isPlaying || posts.length === 0) return;
 
@@ -34,6 +40,17 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
 
     return () => clearInterval(timer);
   }, [isOpen, isPlaying, posts.length]);
+
+  // Preload ảnh của slide tiếp theo để khi chuyển cảnh không bị trễ hay nhấp nháy đen
+  useEffect(() => {
+    if (!isOpen || posts.length <= 1) return;
+    const nextIndex = (currentIndex + 1) % posts.length;
+    const nextPost = posts[nextIndex];
+    if (nextPost) {
+      const img = new Image();
+      img.src = getPostImageUrl(nextPost);
+    }
+  }, [isOpen, currentIndex, posts]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -54,12 +71,13 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
   return (
     <div className="fixed inset-0 z-50 bg-slate-950 text-white flex flex-col justify-between overflow-hidden select-none">
       {/* Background mờ chuyển động */}
-      <div className="absolute inset-0 opacity-20 pointer-events-none">
+      <div className="absolute inset-0 opacity-25 pointer-events-none">
         {activePost && (
           <img
-            src={activePost.thumbnailUrl || activePost.thumbnailImagePath}
+            src={getPostImageUrl(activePost)}
             alt=""
             className="w-full h-full object-cover blur-3xl scale-125"
+            decoding="async"
           />
         )}
       </div>
@@ -110,16 +128,24 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
               transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
               className="max-w-5xl w-full grid grid-cols-1 md:grid-cols-12 gap-4 sm:gap-6 md:gap-8 items-center bg-slate-900/80 border border-amber-500/30 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-10 shadow-2xl backdrop-blur-xl"
             >
-              {/* Cột ảnh với hiệu ứng zoom nghệ thuật */}
-              <div className="md:col-span-6 aspect-[4/3] rounded-xl sm:rounded-2xl overflow-hidden border border-amber-500/40 relative shadow-lg">
-                <motion.img
-                  src={activePost.thumbnailUrl || activePost.thumbnailImagePath}
-                  alt="Kỷ niệm"
-                  className="w-full h-full object-cover"
-                  animate={{ scale: [1, 1.08] }}
-                  transition={{ duration: 7, ease: 'linear' }}
+              {/* Cột ảnh chất lượng cao với Ambient Fill cho mọi tỉ lệ ảnh */}
+              <div className="md:col-span-6 aspect-[4/3] rounded-xl sm:rounded-2xl overflow-hidden border border-amber-500/40 relative shadow-lg bg-slate-950 flex items-center justify-center">
+                {/* Lớp nền mờ Ambient cho ảnh không đúng khung 4:3 */}
+                <img
+                  src={getPostImageUrl(activePost)}
+                  alt=""
+                  className="absolute inset-0 w-full h-full object-cover blur-md opacity-35 scale-110 pointer-events-none"
+                  decoding="async"
                 />
-                <div className="absolute top-2 left-2 sm:top-3 sm:left-3 bg-amber-500 text-slate-950 font-black text-[10px] sm:text-xs px-2.5 py-1 sm:px-3 rounded-full shadow">
+                <motion.img
+                  src={getPostImageUrl(activePost)}
+                  alt="Kỷ niệm"
+                  className="w-full h-full object-contain relative z-10"
+                  animate={{ scale: [1, 1.05] }}
+                  transition={{ duration: 7, ease: 'linear' }}
+                  decoding="async"
+                />
+                <div className="absolute top-2 left-2 sm:top-3 sm:left-3 bg-amber-500 text-slate-950 font-black text-[10px] sm:text-xs px-2.5 py-1 sm:px-3 rounded-full shadow z-20">
                   {activePost.department || 'Đại gia đình IRIS'}
                 </div>
               </div>

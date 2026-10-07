@@ -29,6 +29,7 @@ interface Post {
   department: string;
   thumbnailImagePath?: string;
   thumbnailUrl?: string;
+  previewUrl?: string;
   voteCount: number;
   createdAt: string;
   isPinned?: boolean;
@@ -52,6 +53,74 @@ interface ToastNotification {
 // người dùng sắp cuộn tới khu vực 3D (hoặc khi trang đã rảnh).
 const importGrid3D = () => import('./components/Grid3D');
 const Grid3D = lazy(() => importGrid3D().then((m) => ({ default: m.Grid3D })));
+
+function DetailImagePreview({
+  previewUrl,
+  thumbnailUrl,
+  alt = 'Memory Detail',
+}: {
+  previewUrl: string;
+  thumbnailUrl?: string;
+  alt?: string;
+}) {
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    setIsLoaded(false);
+    setHasError(false);
+  }, [previewUrl]);
+
+  if (hasError) {
+    return (
+      <div className="w-full aspect-video bg-brand-surface border border-brand-border/60 rounded-2xl flex items-center justify-center text-xs text-brand-textMuted mt-4">
+        Không thể hiển thị ảnh
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full aspect-video max-h-[360px] bg-slate-950/80 border border-brand-border/60 dark:border-brand-secondary/20 rounded-2xl overflow-hidden mt-4 shadow-md relative flex items-center justify-center">
+      {/* Lớp nền mờ Ambient cho mọi tỉ lệ ảnh */}
+      {thumbnailUrl && (
+        <img
+          src={thumbnailUrl}
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover blur-xl opacity-35 scale-125 pointer-events-none"
+          decoding="async"
+        />
+      )}
+
+      {/* Hiển thị ngay thumbnail mờ trong lúc chờ nạp ảnh HD */}
+      {!isLoaded && thumbnailUrl && (
+        <img
+          src={thumbnailUrl}
+          alt=""
+          className="w-full h-full object-contain filter blur-sm scale-100 transition-opacity duration-300 relative z-10"
+        />
+      )}
+
+      {/* Ảnh HD xem trước chất lượng cao */}
+      <img
+        src={previewUrl}
+        alt={alt}
+        className={`w-full h-full object-contain relative z-20 transition-opacity duration-500 ${
+          isLoaded ? 'opacity-100' : 'opacity-0'
+        }`}
+        decoding="async"
+        onLoad={() => setIsLoaded(true)}
+        onError={() => setHasError(true)}
+      />
+
+      {/* Vòng quay nhẹ nhàng khi chưa có bất kỳ ảnh nào */}
+      {!isLoaded && !thumbnailUrl && (
+        <div className="absolute inset-0 flex items-center justify-center bg-brand-surface animate-pulse">
+          <div className="w-6 h-6 border-2 border-brand-secondary border-t-transparent rounded-full animate-spin" />
+        </div>
+      )}
+    </div>
+  );
+}
 
 function App() {
   const { theme } = useTheme();
@@ -654,19 +723,12 @@ function App() {
               <X className="w-4 h-4" />
             </button>
 
-            {/* Image viewport with border-glow on dark */}
-            <div className="w-full aspect-video bg-brand-surface border border-brand-border/60 dark:border-brand-secondary/15 rounded-2xl overflow-hidden mt-4 shadow-sm">
-              <img
-                src={`/api/posts/${activePostDetail.id}/preview`}
-                alt="Memory Detail"
-                className="w-full h-full object-contain"
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                  const parent = e.currentTarget.parentElement;
-                  if (parent) parent.style.backgroundColor = 'transparent';
-                }}
-              />
-            </div>
+            {/* Progressive Image viewport with ambient glow */}
+            <DetailImagePreview
+              previewUrl={activePostDetail.previewUrl || `/api/posts/${activePostDetail.id}/preview`}
+              thumbnailUrl={activePostDetail.thumbnailUrl || activePostDetail.thumbnailImagePath}
+              alt="Memory Detail"
+            />
 
             {/* Modern quote layout */}
             <div className="bg-brand-surface/40 border border-brand-border/60 rounded-2xl p-5 relative select-none">

@@ -8,6 +8,7 @@ interface Post {
   department: string;
   thumbnailImagePath?: string;
   thumbnailUrl?: string;
+  previewUrl?: string;
   voteCount: number;
   createdAt: string;
   isPinned?: boolean;

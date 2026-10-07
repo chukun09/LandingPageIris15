@@ -31,8 +31,10 @@ def num2words_vi(n: int) -> str:
         t = (num % 100) // 10
         u = num % 10
         res = []
-        if h > 0 or has_higher:
+        if h > 0:
             res.append(f"{units[h]} trăm")
+        elif has_higher:
+            res.append("không trăm")
         if t == 0:
             if (h > 0 or has_higher) and u > 0:
                 res.append("lẻ")
@@ -78,11 +80,47 @@ def num2words_vi(n: int) -> str:
     return " ".join(parts).strip()
 
 def normalize_vietnamese_text(text: str) -> str:
-    """Tự động chuyển đổi con số và ký tự đặc biệt sang từ ngữ tiếng Việt thuần việt."""
+    """Tự động chuyển đổi con số, ký tự đặc biệt và phiên âm thuật ngữ sang tiếng Việt tự nhiên."""
     if not text:
         return text
-        
-    # Chuyển đổi con số đơn và số đếm thành chữ tiếng Việt
+
+    # 1. Số thập phân (vd: 4.0 -> bốn chấm không) và dải số (vd: 2-6 -> 2 đến 6)
+    text = re.sub(r'(\d+)\.(\d+)', r'\1 chấm \2', text)
+    text = re.sub(r'(\d+)\s*-\s*(\d+)', r'\1 đến \2', text)
+
+    # 2. Ký hiệu phổ biến
+    text = text.replace('%', ' phần trăm ')
+    text = text.replace('&', ' và ')
+    text = text.replace('+', ' cộng ')
+    text = text.replace('@', ' a còng ')
+
+    # 3. Từ viết tắt đặc thù doanh nghiệp (khớp chính xác chữ hoa, không dùng gạch nối tránh khựng âm)
+    exact_acronyms = [
+        (r'\bAI\b', 'Ây ai'),
+        (r'\bCNTT\b', 'Công nghệ thông tin'),
+        (r'\bCBNV\b', 'Cán bộ nhân viên'),
+        (r'\bBTC\b', 'Ban tổ chức'),
+        (r'\bBGD\b', 'Ban giám đốc'),
+        (r'\bHĐQT\b', 'Hội đồng quản trị'),
+        (r'\bCEO\b', 'Xi i ô'),
+    ]
+    for pattern, rep in exact_acronyms:
+        text = re.sub(pattern, rep, text)
+
+    # 4. Thương hiệu & thuật ngữ tiếng Anh thông dụng (không phân biệt hoa thường, không dùng gạch nối)
+    case_insensitive = [
+        (r'\bIRIS TECH\b', 'Ai rít Tếch'),
+        (r'\bIRIS\b', 'Ai rít'),
+        (r'\bTeambuilding\b', 'Tim bin đing'),
+        (r'\bGala Dinner\b', 'Ga la Đin nơ'),
+        (r'\bGala\b', 'Ga la'),
+        (r'\bApp\b', 'Ứng dụng'),
+        (r'\bDINO\b', 'Đi nô'),
+    ]
+    for pattern, rep in case_insensitive:
+        text = re.sub(pattern, rep, text, flags=re.IGNORECASE)
+
+    # 5. Chuyển đổi toàn bộ con số nguyên thành chữ tiếng Việt
     def replace_num(match):
         num_str = match.group(0)
         try:
@@ -92,12 +130,101 @@ def normalize_vietnamese_text(text: str) -> str:
             return num_str
 
     text = re.sub(r'\b\d+\b', replace_num, text)
-    text = text.replace('%', ' phần trăm ')
-    text = text.replace('&', ' và ')
-    text = text.replace('+', ' cộng ')
-    text = text.replace('@', ' a còng ')
     text = re.sub(r'\s+', ' ', text).strip()
     return text
+
+def smart_chunk_vietnamese_text(text: str, max_chars: int = 220) -> list:
+    """
+    Phân đoạn văn bản tiếng Việt thông minh thành các câu trọn vẹn từ 80-220 ký tự,
+    giữ trọn ngữ điệu tự nhiên và nhịp thở của câu, không bị băm vụn ở dấu phẩy,
+    tuyệt đối không vượt quá giới hạn 250 ký tự của mô hình Coqui XTTS.
+    """
+    if not text or not text.strip():
+        return []
+
+    # 1. Tách theo dấu kết thúc câu (. ! ? hoặc xuống dòng)
+    raw_sentences = re.split(r'([.!?\n]+)', text)
+    sentences = []
+    for i in range(0, len(raw_sentences), 2):
+        s = raw_sentences[i].strip()
+        punct = raw_sentences[i + 1].strip() if i + 1 < len(raw_sentences) else '.'
+        if not punct or punct == '\n':
+            punct = '.'
+        if s:
+            sentences.append(f"{s}{punct}")
+
+    final_chunks = []
+    for s in sentences:
+        if len(s) <= max_chars:
+            final_chunks.append(s)
+            continue
+
+        raw_clauses = re.split(r'([,;:–—]+)', s)
+        clauses = []
+        for j in range(0, len(raw_clauses), 2):
+            c = raw_clauses[j].strip()
+            p = raw_clauses[j + 1].strip() if j + 1 < len(raw_clauses) else ''
+            if c:
+                clauses.append(f"{c}{p}")
+
+        buf = ""
+        for c in clauses:
+            if not buf:
+                buf = c
+            elif len(buf) + len(c) + 1 <= max_chars:
+                buf += " " + c
+            else:
+                final_chunks.append(buf)
+                buf = c
+        if buf:
+            final_chunks.append(buf)
+
+    guaranteed_chunks = []
+    for ch in final_chunks:
+        if len(ch) <= max_chars:
+            guaranteed_chunks.append(ch)
+        else:
+            words = ch.split()
+            cur = ""
+            for w in words:
+                if not cur:
+                    cur = w
+                elif len(cur) + len(w) + 1 <= max_chars:
+                    cur += " " + w
+                else:
+                    guaranteed_chunks.append(cur + ".")
+                    cur = w
+            if cur:
+                guaranteed_chunks.append(cur)
+
+    return guaranteed_chunks
+
+def combine_wav_files(wav_paths: list, output_path: str, pause_sec: float = 0.14):
+    """Ghép nối nhiều tệp WAV với khoảng lặng tự nhiên 140ms giữa các câu."""
+    if not wav_paths:
+        return
+    if len(wav_paths) == 1:
+        if wav_paths[0] != output_path:
+            import shutil
+            shutil.copyfile(wav_paths[0], output_path)
+        return
+
+    with wave.open(wav_paths[0], 'rb') as first_wav:
+        params = first_wav.getparams()
+        sample_rate = params.framerate
+        num_channels = params.nchannels
+        sampwidth = params.sampwidth
+
+    silence_frames = int(sample_rate * pause_sec)
+    silence_bytes = b'\x00' * (silence_frames * num_channels * sampwidth)
+
+    with wave.open(output_path, 'wb') as out_wav:
+        out_wav.setparams(params)
+        for i, path in enumerate(wav_paths):
+            with wave.open(path, 'rb') as in_wav:
+                out_wav.writeframes(in_wav.readframes(in_wav.getnframes()))
+            if i < len(wav_paths) - 1:
+                out_wav.writeframes(silence_bytes)
 
 def apply_tokenizer_safeguard(model):
     """
@@ -146,8 +273,7 @@ class TTSRequest(BaseModel):
     text: str
     speaker_wav: str = "voices/default_vietnamese.wav"
     language: str = "vi"
-    speed: float = 1.08
-    split_sentences: bool = False
+    speed: float = 1.03
     temperature: float = 0.72
 
 @asynccontextmanager
@@ -256,34 +382,71 @@ async def generate_tts(request: TTSRequest):
 
         target_lang = request.language if request.language else "vi"
 
-        # Chuẩn hóa tiếng Việt thuần (chuyển chữ số như '15' -> 'mười lăm' để tuyệt đối không đọc tiếng Anh 'fifteen')
+        # Chuẩn hóa tiếng Việt thuần (chuyển chữ số và từ viết tắt sang tiếng Việt tự nhiên)
         normalized_text = normalize_vietnamese_text(request.text)
 
+        # Phân đoạn thông minh (Smart Chunker): mỗi đoạn < 150 ký tự để không vượt quá giới hạn 250 ký tự của Coqui XTTS
+        chunks = smart_chunk_vietnamese_text(normalized_text, max_chars=150)
+        if not chunks:
+            chunks = [normalized_text]
+
+        effective_speed = request.speed if (request.speed and request.speed > 0) else 1.03
+        effective_temp = request.temperature if (request.temperature and request.temperature > 0) else 0.72
+
         logger.info(
-            "Sinh âm thanh tiếng Việt thuần (Speed=%s, Temp=%s, SpeakerWav='%s') cho text: '%s'",
-            request.speed, request.temperature, speaker_wav_path, normalized_text[:35]
+            "Sinh âm thanh tiếng Việt thuần (%d chunks, Speed=%.2f, Temp=%.2f, SpeakerWav='%s')",
+            len(chunks), effective_speed, effective_temp, speaker_wav_path
         )
 
-        tts_model.tts_to_file(
-            text=normalized_text,
-            speaker_wav=speaker_wav_path,
-            language=target_lang,
-            file_path=output_path,
-            speed=request.speed,
-            split_sentences=request.split_sentences,
-            temperature=request.temperature,
-            repetition_penalty=5.0,
-            top_k=50,
-            top_p=0.85
-        )
+        temp_chunk_files = []
+        try:
+            if len(chunks) == 1:
+                tts_model.tts_to_file(
+                    text=chunks[0],
+                    speaker_wav=speaker_wav_path,
+                    language=target_lang,
+                    file_path=output_path,
+                    speed=effective_speed,
+                    split_sentences=False,
+                    temperature=effective_temp,
+                    repetition_penalty=1.85,
+                    top_k=50,
+                    top_p=0.82
+                )
+            else:
+                for idx, chunk in enumerate(chunks):
+                    chunk_path = os.path.join(output_dir, f"chunk_{uuid.uuid4().hex[:8]}_{idx}.wav")
+                    temp_chunk_files.append(chunk_path)
+                    tts_model.tts_to_file(
+                        text=chunk,
+                        speaker_wav=speaker_wav_path,
+                        language=target_lang,
+                        file_path=chunk_path,
+                        speed=effective_speed,
+                        split_sentences=False,
+                        temperature=effective_temp,
+                        repetition_penalty=1.85,
+                        top_k=50,
+                        top_p=0.82
+                    )
+                combine_wav_files(temp_chunk_files, output_path, pause_sec=0.14)
 
-        with open(output_path, "rb") as f:
-            audio_bytes = f.read()
+            with open(output_path, "rb") as f:
+                audio_bytes = f.read()
 
-        if os.path.exists(output_path):
-            os.remove(output_path)
-
-        return Response(content=audio_bytes, media_type="audio/wav")
+            return Response(content=audio_bytes, media_type="audio/wav")
+        finally:
+            if os.path.exists(output_path):
+                try:
+                    os.remove(output_path)
+                except Exception:
+                    pass
+            for tf in temp_chunk_files:
+                if os.path.exists(tf):
+                    try:
+                        os.remove(tf)
+                    except Exception:
+                        pass
 
     except Exception as e:
         logger.error(f"Lỗi trong quá trình sinh giọng nói ViXTTS: {e}", exc_info=True)

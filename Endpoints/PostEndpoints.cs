@@ -123,7 +123,7 @@ public static class PostEndpoints
             if (stream == null) return TypedResults.NotFound();
 
             httpContext.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
-            return TypedResults.Stream(stream, "image/jpeg");
+            return TypedResults.Stream(stream, DetectImageContentType(stream));
         })
         .WithName("GetPostThumbnail")
         .WithSummary("Proxy ảnh thu nhỏ cùng domain để tránh lỗi CORS khi vẽ lên canvas");
@@ -140,7 +140,7 @@ public static class PostEndpoints
             if (stream == null) return TypedResults.NotFound();
 
             httpContext.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
-            return TypedResults.Stream(stream, "image/jpeg");
+            return TypedResults.Stream(stream, DetectImageContentType(stream));
         })
         .WithName("GetPostPreview")
         .WithSummary("Ảnh xem trước giữ tỉ lệ gốc, đã nén lại cho modal chi tiết và thiệp lưu niệm");
@@ -202,5 +202,25 @@ public static class PostEndpoints
         .WithName("VotePost")
         .WithSummary("Thả tim bài viết")
         .WithDescription("Cộng 1 điểm bình chọn cho bài viết (Có bảo vệ chống buff tim ảo).");
+    }
+
+    private static string DetectImageContentType(Stream stream)
+    {
+        if (stream.CanSeek)
+        {
+            var header = new byte[12];
+            var read = stream.Read(header, 0, header.Length);
+            stream.Position = 0;
+            if (read >= 12 && header[0] == (byte)'R' && header[1] == (byte)'I' && header[2] == (byte)'F' && header[3] == (byte)'F'
+                && header[8] == (byte)'W' && header[9] == (byte)'E' && header[10] == (byte)'B' && header[11] == (byte)'P')
+            {
+                return "image/webp";
+            }
+            if (read >= 8 && header[0] == 0x89 && header[1] == 0x50 && header[2] == 0x4E && header[3] == 0x47)
+            {
+                return "image/png";
+            }
+        }
+        return "image/jpeg";
     }
 }

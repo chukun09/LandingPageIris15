@@ -32,7 +32,8 @@ public sealed record PostResponse(
     string ThumbnailUrl,
     int VoteCount,
     DateTimeOffset CreatedAt,
-    bool IsPinned = false);
+    bool IsPinned = false,
+    string? PreviewUrl = null);
 
 /// <summary>
 /// Phản hồi thông tin tập Podcast AI.

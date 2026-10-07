@@ -10,6 +10,7 @@ interface Post {
   department: string;
   thumbnailImagePath?: string;
   thumbnailUrl?: string;
+  previewUrl?: string;
   voteCount: number;
   createdAt: string;
   isPinned?: boolean;
@@ -219,14 +220,20 @@ export const MemoryWall: React.FC<MemoryWallProps> = ({
                       </div>
                     )}
                     <img
-                      src={post.thumbnailUrl || post.thumbnailImagePath}
-                      alt="Memory thumbnail"
+                      src={post.previewUrl || `/api/posts/${post.id}/preview`}
+                      alt="Memory photo"
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       loading="lazy"
+                      decoding="async"
                       onError={(e) => {
-                        e.currentTarget.style.display = 'none';
-                        const parent = e.currentTarget.parentElement;
-                        if (parent) parent.style.backgroundColor = 'transparent';
+                        const fallback = post.thumbnailUrl || post.thumbnailImagePath || `/api/posts/${post.id}/thumbnail`;
+                        if (fallback && !e.currentTarget.src.endsWith(fallback)) {
+                          e.currentTarget.src = fallback;
+                        } else {
+                          e.currentTarget.style.display = 'none';
+                          const parent = e.currentTarget.parentElement;
+                          if (parent) parent.style.backgroundColor = 'transparent';
+                        }
                       }}
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-900/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-between p-3">

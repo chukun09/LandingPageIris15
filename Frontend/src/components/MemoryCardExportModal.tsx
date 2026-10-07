@@ -8,6 +8,7 @@ interface Post {
   department: string;
   thumbnailImagePath?: string;
   thumbnailUrl?: string;
+  previewUrl?: string;
   voteCount: number;
   createdAt: string;
   isPinned?: boolean;
@@ -125,7 +126,8 @@ export const MemoryCardExportModal: React.FC<MemoryCardExportModalProps> = ({
     // Dùng ảnh preview (giữ tỉ lệ gốc, không crop vuông như thumbnail) qua proxy same-origin:
     // ảnh gốc có thể nằm trên Cloudflare R2 (domain khác), tải trực tiếp với crossOrigin sẽ
     // bị CORS chặn khi vẽ lên canvas.
-    const photoUrl = `/api/posts/${post.id}/preview`;
+    const photoUrl = post.previewUrl || `/api/posts/${post.id}/preview`;
+    const fallbackThumbUrl = post.thumbnailUrl || post.thumbnailImagePath;
 
     const drawRemainingContent = () => {
       // Khung ảnh
@@ -272,7 +274,13 @@ export const MemoryCardExportModal: React.FC<MemoryCardExportModalProps> = ({
     if (photoUrl) {
       photoImg.src = photoUrl;
       photoImg.onload = drawRemainingContent;
-      photoImg.onerror = drawRemainingContent;
+      photoImg.onerror = () => {
+        if (fallbackThumbUrl && photoImg.src !== fallbackThumbUrl) {
+          photoImg.src = fallbackThumbUrl;
+        } else {
+          drawRemainingContent();
+        }
+      };
     } else {
       drawRemainingContent();
     }
