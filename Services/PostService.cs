@@ -660,6 +660,16 @@ public sealed class PostService : IPostService
         return dict;
     }
 
+    public async Task<Stream?> GetThumbnailStreamAsync(int id, CancellationToken ct)
+    {
+        if (_storageService == null) return null;
+
+        var paths = await GetThumbnailPathsAsync(ct);
+        if (!paths.TryGetValue(id, out var path) || string.IsNullOrWhiteSpace(path)) return null;
+
+        return await _storageService.GetFileStreamAsync(path, ct);
+    }
+
     public async Task<IReadOnlyDictionary<int, string>> GetOriginalPathsAsync(CancellationToken ct)
     {
         if (_cache.TryGetValue(OriginalPathsKey, out IReadOnlyDictionary<int, string>? cached) && cached != null)

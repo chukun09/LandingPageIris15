@@ -111,6 +111,23 @@ public static class PostEndpoints
         .WithSummary("Lấy danh sách các bài viết đã duyệt")
         .WithDescription("Danh sách bài đăng hiển thị trên Bức tường ký ức.");
 
+        // 2b. Proxy ảnh thu nhỏ cùng domain — khi ảnh lưu trên Cloudflare R2, tải trực tiếp
+        // từ trình duyệt (crossOrigin) sẽ bị chặn CORS khi vẽ lên canvas (vd: xuất Thiệp Lưu Niệm).
+        group.MapGet("/{id:int}/thumbnail", async Task<Results<FileStreamHttpResult, NotFound>> (
+            int id,
+            HttpContext httpContext,
+            IPostService postService,
+            CancellationToken ct) =>
+        {
+            var stream = await postService.GetThumbnailStreamAsync(id, ct);
+            if (stream == null) return TypedResults.NotFound();
+
+            httpContext.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+            return TypedResults.Stream(stream, "image/jpeg");
+        })
+        .WithName("GetPostThumbnail")
+        .WithSummary("Proxy ảnh thu nhỏ cùng domain để tránh lỗi CORS khi vẽ lên canvas");
+
         // 3. CBNV thả tim bình chọn bài viết (Anti-Cheat Vote Guard)
         group.MapPost("/{id:int}/vote", async Task<Results<Ok<string>, BadRequest<string>, NotFound>> (
             int id,

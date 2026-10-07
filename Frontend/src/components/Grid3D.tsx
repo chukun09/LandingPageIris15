@@ -253,7 +253,7 @@ export const Grid3D = ({
     : 'w-full flex flex-col items-center py-4 relative';
   const frame = isFullscreen
     ? 'flex-1 w-full relative overflow-hidden bg-brand-card border border-brand-border/60 rounded-lg'
-    : 'w-full aspect-[16/7] min-h-[300px] sm:min-h-[450px] md:min-h-[550px] overflow-hidden relative rounded-lg border border-brand-border/60 bg-brand-card';
+    : 'w-full aspect-[16/7] min-h-[220px] sm:min-h-[380px] md:min-h-[550px] overflow-hidden relative rounded-lg border border-brand-border/60 bg-brand-card';
 
   const content = (
     <div className={shell}>
@@ -316,34 +316,36 @@ export const Grid3D = ({
           </button>
         ) : null}
 
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 z-20">
+        <div className="absolute bottom-2 sm:bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5 sm:gap-2 z-20 max-w-[94%]">
           <button
             onClick={() => setExhibitionMode((v) => !v)}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-brand-card/90 backdrop-blur border border-brand-border text-[11px] font-bold tracking-wide text-brand-textSecondary hover:text-brand-primary hover:border-brand-primary/40 transition-all active:scale-95"
+            className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-lg bg-brand-card/90 backdrop-blur border border-brand-border text-[9px] sm:text-[11px] font-bold tracking-wide text-brand-textSecondary hover:text-brand-primary hover:border-brand-primary/40 transition-all active:scale-95 whitespace-nowrap shrink-0"
+            title={exhibitionMode ? 'XẾP CHỮ IRIS 15' : 'BẢN CONTACT SHEET'}
           >
-            <Grid className="w-3.5 h-3.5" />
-            {exhibitionMode ? 'XẾP CHỮ IRIS 15' : 'BẢN CONTACT SHEET'}
+            <Grid className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
+            <span className="hidden sm:inline">{exhibitionMode ? 'XẾP CHỮ IRIS 15' : 'BẢN CONTACT SHEET'}</span>
+            <span className="sm:hidden">{exhibitionMode ? 'XẾP CHỮ' : 'CONTACT SHEET'}</span>
           </button>
           {!isFullscreen && (
             <button
               onClick={() => setIsFullscreen(true)}
-              className="p-2 rounded-lg bg-brand-card/90 backdrop-blur border border-brand-border text-brand-textSecondary hover:text-brand-primary transition-all active:scale-95"
+              className="p-1.5 sm:p-2 rounded-lg bg-brand-card/90 backdrop-blur border border-brand-border text-brand-textSecondary hover:text-brand-primary transition-all active:scale-95 shrink-0"
               title="Toàn màn hình"
             >
-              <Maximize2 className="w-3.5 h-3.5" />
+              <Maximize2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
             </button>
           )}
           {isFullscreen && (
             <button
               onClick={() => setAutoRotate((v) => !v)}
-              className={`p-2 rounded-lg bg-brand-card/90 backdrop-blur border transition-all active:scale-95 ${
+              className={`p-1.5 sm:p-2 rounded-lg bg-brand-card/90 backdrop-blur border transition-all active:scale-95 shrink-0 ${
                 autoRotate
                   ? 'border-brand-primary/50 text-brand-primary'
                   : 'border-brand-border text-brand-textSecondary'
               }`}
               title="Tự xoay"
             >
-              <RotateCw className="w-3.5 h-3.5" />
+              <RotateCw className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
             </button>
           )}
         </div>

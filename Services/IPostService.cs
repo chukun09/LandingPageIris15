@@ -20,6 +20,9 @@ public interface IPostService
     /// <summary>Đường dẫn web tới ảnh thu nhỏ của từng bài đã duyệt, tra theo Id.</summary>
     Task<IReadOnlyDictionary<int, string>> GetThumbnailPathsAsync(CancellationToken ct);
 
+    /// <summary>Luồng dữ liệu ảnh thu nhỏ của một bài, dùng để proxy same-origin (tránh lỗi CORS khi ảnh lưu trên R2).</summary>
+    Task<Stream?> GetThumbnailStreamAsync(int id, CancellationToken ct);
+
     /// <summary>Đường dẫn web tới ảnh GỐC của từng bài đã duyệt — chỉ dùng cho bản in.</summary>
     Task<IReadOnlyDictionary<int, string>> GetOriginalPathsAsync(CancellationToken ct);
 
