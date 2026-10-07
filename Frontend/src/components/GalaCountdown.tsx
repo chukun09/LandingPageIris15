@@ -4,7 +4,7 @@ import { Sparkles, Award } from 'lucide-react';
 import { fireCelebration } from './CelebrationConfetti';
 
 // Thiết lập mốc thời gian Đại lễ Gala 15 năm (tháng 10 năm 2026 hoặc ngày kỷ niệm công ty)
-const GALA_DATE = new Date('2026-10-15T18:00:00+07:00').getTime();
+const GALA_DATE = new Date('2026-11-28T18:00:00+07:00').getTime();
 
 interface TimeLeft {
   days: number;
