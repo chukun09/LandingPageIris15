@@ -124,18 +124,18 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onSub
                 required
               >
                 <option value="" disabled hidden>-- Chọn phòng ban / bộ phận --</option>
-                <option value="Ban Tổng giám đốc">Ban Tổng giám đốc</option>
-                <option value="Hội đồng quản trị">Hội đồng quản trị</option>
-                <option value="Phòng Kỹ thuật vận hành">Phòng Kỹ thuật vận hành</option>
-                <option value="Phòng Phát triển phần mềm">Phòng Phát triển phần mềm</option>
+                <option value="Hội đồng Quản trị">Hội đồng Quản trị</option>
+                <option value="Ban Tổng Giám đốc">Ban Tổng Giám đốc</option>
+                <option value="Phòng Kỹ thuật Vận hành">Phòng Kỹ thuật Vận hành</option>
+                <option value="Phòng Phát triển Phần mềm">Phòng Phát triển Phần mềm</option>
                 <option value="Phòng Sản phẩm">Phòng Sản phẩm</option>
-                <option value="Phòng Phát triển kinh doanh">Phòng Phát triển kinh doanh</option>
+                <option value="Phòng Phát triển Kinh doanh">Phòng Phát triển Kinh doanh</option>
                 <option value="Phòng Kinh doanh">Phòng Kinh doanh</option>
-                <option value="Phòng Đối soát vận hành">Phòng Đối soát vận hành</option>
-                <option value="Phòng Chăm sóc khách hàng">Phòng Chăm sóc khách hàng</option>
-                <option value="Phòng Kế toán">Phòng Kế toán</option>
-                <option value="Phòng Hành chính nhân sự">Phòng Hành chính nhân sự</option>
                 <option value="Văn phòng Hồ Chí Minh">Văn phòng Hồ Chí Minh</option>
+                <option value="Phòng Đối soát Vận hành">Phòng Đối soát Vận hành</option>
+                <option value="Phòng Chăm sóc Khách hàng">Phòng Chăm sóc Khách hàng</option>
+                <option value="Phòng Kế toán">Phòng Kế toán</option>
+                <option value="Phòng Hành chính Nhân sự">Phòng Hành chính Nhân sự</option>
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-brand-textSecondary">
                 <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
