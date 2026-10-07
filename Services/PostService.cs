@@ -72,6 +72,7 @@ public sealed class PostService : IPostService
     {
         Directory.CreateDirectory(Path.Combine(_webRootPath, "uploads", "original"));
         Directory.CreateDirectory(Path.Combine(_webRootPath, "uploads", "thumbnail"));
+        Directory.CreateDirectory(Path.Combine(_webRootPath, "uploads", "preview"));
         Directory.CreateDirectory(Path.Combine(_webRootPath, "uploads", "podcasts"));
         Directory.CreateDirectory(Path.Combine(_webRootPath, "uploads", "temp"));
     }
@@ -385,6 +386,32 @@ public sealed class PostService : IPostService
             thumbnailUrl = $"/uploads/thumbnail/{uniqueFileName}";
         }
 
+        // 2b. Ảnh preview giữ nguyên tỉ lệ gốc (không crop, cạnh dài tối đa 1600px) để
+        // modal chi tiết và thiệp lưu niệm không phải tự tải + resize ảnh gốc mỗi lần xem.
+        using var previewMemoryStream = new MemoryStream();
+        originalMemoryStream.Position = 0;
+        using (var image = await Image.LoadAsync(_imagePolicy.Configuration, originalMemoryStream, ct))
+        {
+            image.Mutate(x => x.Resize(new ResizeOptions
+            {
+                Size = new Size(1600, 1600),
+                Mode = ResizeMode.Max
+            }));
+            await image.SaveAsJpegAsync(previewMemoryStream, new SixLabors.ImageSharp.Formats.Jpeg.JpegEncoder { Quality = 82 }, ct);
+        }
+        previewMemoryStream.Position = 0;
+
+        if (_storageService != null)
+        {
+            await _storageService.SaveFileAsync(previewMemoryStream, $"uploads/preview/{uniqueFileName}", "image/jpeg", ct);
+        }
+        else
+        {
+            var previewPath = Path.Combine(_webRootPath, "uploads", "preview", uniqueFileName);
+            using var previewFileStream = new FileStream(previewPath, FileMode.Create);
+            await previewMemoryStream.CopyToAsync(previewFileStream, ct);
+        }
+
         // 3. Lưu vào Database (Mặc định IsApproved = false để kiểm duyệt trước)
         var post = new MemoryPost
         {
@@ -569,11 +596,14 @@ public sealed class PostService : IPostService
             originalUrl = $"/uploads/original/{uniqueFileName}";
         }
 
-        // 2. Tạo ảnh thumbnail nén (Crop vuông 300x300 để xếp lưới).
+        // 2. Tạo ảnh thumbnail nén (Crop vuông 300x300 để xếp lưới) và ảnh preview giữ
+        // nguyên tỉ lệ gốc (không crop, cạnh dài tối đa 1600px) để modal chi tiết và
+        // thiệp lưu niệm không phải tự tải + resize ảnh gốc nặng mỗi lần xem.
         try
         {
             var localOriginalPath = Path.Combine(_webRootPath, "uploads", "original", uniqueFileName);
             var sourcePath = File.Exists(localOriginalPath) ? localOriginalPath : item.TempFilePath;
+
             var thumbnailStream = new MemoryStream();
             using (var image = await Image.LoadAsync(_imagePolicy.Configuration, sourcePath, ct))
             {
@@ -586,16 +616,35 @@ public sealed class PostService : IPostService
             }
             thumbnailStream.Position = 0;
 
+            var previewStream = new MemoryStream();
+            using (var image = await Image.LoadAsync(_imagePolicy.Configuration, sourcePath, ct))
+            {
+                image.Mutate(x => x.Resize(new ResizeOptions
+                {
+                    Size = new Size(1600, 1600),
+                    Mode = ResizeMode.Max
+                }));
+                await image.SaveAsJpegAsync(previewStream, new SixLabors.ImageSharp.Formats.Jpeg.JpegEncoder { Quality = 82 }, ct);
+            }
+            previewStream.Position = 0;
+
             if (_storageService != null)
             {
                 thumbnailUrl = await _storageService.SaveFileAsync(thumbnailStream, $"uploads/thumbnail/{uniqueFileName}", "image/jpeg", ct);
+                await _storageService.SaveFileAsync(previewStream, $"uploads/preview/{uniqueFileName}", "image/jpeg", ct);
             }
             else
             {
                 var thumbnailPath = Path.Combine(_webRootPath, "uploads", "thumbnail", uniqueFileName);
-                using var fileStream = new FileStream(thumbnailPath, FileMode.Create);
-                await thumbnailStream.CopyToAsync(fileStream, ct);
+                using (var fileStream = new FileStream(thumbnailPath, FileMode.Create))
+                {
+                    await thumbnailStream.CopyToAsync(fileStream, ct);
+                }
                 thumbnailUrl = $"/uploads/thumbnail/{uniqueFileName}";
+
+                var previewPath = Path.Combine(_webRootPath, "uploads", "preview", uniqueFileName);
+                using var previewFileStream = new FileStream(previewPath, FileMode.Create);
+                await previewStream.CopyToAsync(previewFileStream, ct);
             }
         }
         catch (Exception) when (!ct.IsCancellationRequested)
@@ -677,22 +726,35 @@ public sealed class PostService : IPostService
         var paths = await GetOriginalPathsAsync(ct);
         if (!paths.TryGetValue(id, out var path) || string.IsNullOrWhiteSpace(path)) return null;
 
-        using var originalStream = await _storageService.GetFileStreamAsync(path, ct);
-        if (originalStream == null) return null;
+        // Bài đăng mới đã có sẵn file preview lưu lúc upload — đọc thẳng, không cần
+        // tải ảnh gốc nặng + resize lại mỗi lần xem (nhanh và ổn định hơn nhiều).
+        var dedicatedPreviewPath = path.Replace("uploads/original/", "uploads/preview/");
+        var dedicatedStream = await _storageService.GetFileStreamAsync(dedicatedPreviewPath, ct);
+        if (dedicatedStream != null) return dedicatedStream;
 
-        // Giữ nguyên tỉ lệ ảnh gốc (không crop), chỉ nén lại kích thước tối đa
-        // 1600px để modal xem chi tiết và thiệp lưu niệm tải nhanh, đỡ lag.
-        using var image = await Image.LoadAsync(_imagePolicy.Configuration, originalStream, ct);
-        image.Mutate(x => x.Resize(new ResizeOptions
+        // Bài đăng cũ (trước khi có bước lưu preview riêng) — resize tạm từ ảnh gốc.
+        try
         {
-            Size = new Size(1600, 1600),
-            Mode = ResizeMode.Max
-        }));
+            using var originalStream = await _storageService.GetFileStreamAsync(path, ct);
+            if (originalStream == null) return null;
 
-        var previewStream = new MemoryStream();
-        await image.SaveAsJpegAsync(previewStream, new SixLabors.ImageSharp.Formats.Jpeg.JpegEncoder { Quality = 82 }, ct);
-        previewStream.Position = 0;
-        return previewStream;
+            using var image = await Image.LoadAsync(_imagePolicy.Configuration, originalStream, ct);
+            image.Mutate(x => x.Resize(new ResizeOptions
+            {
+                Size = new Size(1600, 1600),
+                Mode = ResizeMode.Max
+            }));
+
+            var previewStream = new MemoryStream();
+            await image.SaveAsJpegAsync(previewStream, new SixLabors.ImageSharp.Formats.Jpeg.JpegEncoder { Quality = 82 }, ct);
+            previewStream.Position = 0;
+            return previewStream;
+        }
+        catch (Exception) when (!ct.IsCancellationRequested)
+        {
+            // Ảnh gốc lỗi/đọc thất bại — trả 404 thay vì 500 để frontend chỉ ẩn ảnh thay vì vỡ trang.
+            return null;
+        }
     }
 
     public async Task<IReadOnlyDictionary<int, string>> GetOriginalPathsAsync(CancellationToken ct)
