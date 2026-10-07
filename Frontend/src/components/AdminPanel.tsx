@@ -166,16 +166,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     <ModalShell isOpen={isOpen} onClose={onClose} maxWidth="max-w-6xl xl:max-w-7xl">
       <div className="flex flex-col h-[88vh]">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-brand-border flex items-center justify-between shrink-0 bg-brand-surface/40">
-          <div>
-            <h3 className="text-base sm:text-lg font-black text-brand-textPrimary flex items-center gap-2">
-              <Settings className="w-5 h-5 text-brand-primary" /> Ban Tổ Chức - Quản Trị Sự Kiện
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-brand-border flex flex-wrap items-center justify-between gap-y-2 shrink-0 bg-brand-surface/40">
+          <div className="min-w-0">
+            <h3 className="text-sm sm:text-lg font-black text-brand-textPrimary flex items-center gap-2">
+              <Settings className="w-5 h-5 text-brand-primary shrink-0" /> <span className="truncate">Ban Tổ Chức - Quản Trị Sự Kiện</span>
             </h3>
-            <p className="text-xs text-brand-textSecondary mt-0.5">
+            <p className="text-xs text-brand-textSecondary mt-0.5 hidden sm:block">
               Duyệt kỷ niệm & ghim bài, sản xuất Radio Podcast AI và quản lý Backdrop in ấn.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             {onOpenBackdropViewer && (
               <button
                 type="button"
@@ -197,17 +197,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </div>
 
         {/* Primary Module Tabs */}
-        <div className="px-6 bg-brand-surface/75 border-b border-brand-border flex items-center justify-between shrink-0">
-          <div className="flex gap-2 py-2">
+        <div className="px-4 sm:px-6 bg-brand-surface/75 border-b border-brand-border flex items-center justify-between shrink-0 overflow-x-auto custom-scrollbar">
+          <div className="flex gap-2 py-2 w-max">
             <button
               onClick={() => setMainTab('posts')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs transition-all ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs transition-all whitespace-nowrap shrink-0 ${
                 mainTab === 'posts'
                   ? 'bg-brand-card text-brand-textPrimary shadow-sm border border-brand-border'
                   : 'text-brand-textSecondary hover:text-brand-textPrimary hover:bg-brand-surface'
               }`}
             >
-              <FileText className={`w-4 h-4 ${mainTab === 'posts' ? 'text-brand-primary' : 'text-brand-textMuted'}`} />
+              <FileText className={`w-4 h-4 shrink-0 ${mainTab === 'posts' ? 'text-brand-primary' : 'text-brand-textMuted'}`} />
               <span>Quản Lý Kỷ Niệm</span>
               {pendingPosts.length > 0 ? (
                 <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-400 border border-amber-500/40">
@@ -222,13 +222,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
             <button
               onClick={() => setMainTab('podcasts')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs transition-all ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs transition-all whitespace-nowrap shrink-0 ${
                 mainTab === 'podcasts'
                   ? 'bg-brand-card text-brand-textPrimary shadow-sm border border-brand-border'
                   : 'text-brand-textSecondary hover:text-brand-textPrimary hover:bg-brand-surface'
               }`}
             >
-              <Radio className={`w-4 h-4 ${mainTab === 'podcasts' ? 'text-brand-secondary' : 'text-brand-textMuted'}`} />
+              <Radio className={`w-4 h-4 shrink-0 ${mainTab === 'podcasts' ? 'text-brand-secondary' : 'text-brand-textMuted'}`} />
               <span>Radio Podcast AI</span>
               <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-brand-surfaceHover text-brand-textSecondary">
                 {podcasts.length} số
@@ -237,13 +237,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
             <button
               onClick={() => setMainTab('backdrop')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs transition-all ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs transition-all whitespace-nowrap shrink-0 ${
                 mainTab === 'backdrop'
                   ? 'bg-brand-card text-brand-textPrimary shadow-sm border border-brand-border'
                   : 'text-brand-textSecondary hover:text-brand-textPrimary hover:bg-brand-surface'
               }`}
             >
-              <Image className={`w-4 h-4 ${mainTab === 'backdrop' ? 'text-brand-primary' : 'text-brand-textMuted'}`} />
+              <Image className={`w-4 h-4 shrink-0 ${mainTab === 'backdrop' ? 'text-brand-primary' : 'text-brand-textMuted'}`} />
               <span>Bản In Backdrop</span>
               <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-brand-surfaceHover text-brand-textSecondary">
                 6×3m
@@ -253,7 +253,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </div>
 
         {/* Content Area */}
-        <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1 custom-scrollbar">
           <AnimatePresence mode="wait">
             <motion.div
               key={mainTab}
@@ -267,10 +267,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <div className="space-y-4">
                   {/* Sub-navigation bar */}
                   <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-brand-border">
-                    <div className="inline-flex p-1 bg-brand-surface rounded-xl border border-brand-border">
+                    <div className="inline-flex p-1 bg-brand-surface rounded-xl border border-brand-border max-w-full overflow-x-auto custom-scrollbar">
                       <button
                         onClick={() => setPostsSubTab('pending')}
-                        className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
                           postsSubTab === 'pending'
                             ? 'bg-brand-card text-brand-textPrimary shadow-sm border border-brand-border'
                             : 'text-brand-textSecondary hover:text-brand-textPrimary'
@@ -290,7 +290,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
                       <button
                         onClick={() => setPostsSubTab('approved')}
-                        className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
                           postsSubTab === 'approved'
                             ? 'bg-brand-card text-brand-textPrimary shadow-sm border border-brand-border'
                             : 'text-brand-textSecondary hover:text-brand-textPrimary'
@@ -507,10 +507,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <div className="space-y-4">
                   {/* Sub-navigation bar */}
                   <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-brand-border">
-                    <div className="inline-flex p-1 bg-brand-surface rounded-xl border border-brand-border">
+                    <div className="inline-flex p-1 bg-brand-surface rounded-xl border border-brand-border max-w-full overflow-x-auto custom-scrollbar">
                       <button
                         onClick={() => setPodcastSubTab('studio')}
-                        className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
                           podcastSubTab === 'studio'
                             ? 'bg-brand-card text-brand-textPrimary shadow-sm border border-brand-border'
                             : 'text-brand-textSecondary hover:text-brand-textPrimary'
@@ -522,7 +522,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
                       <button
                         onClick={() => setPodcastSubTab('list')}
-                        className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
                           podcastSubTab === 'list'
                             ? 'bg-brand-card text-brand-textPrimary shadow-sm border border-brand-border'
                             : 'text-brand-textSecondary hover:text-brand-textPrimary'
@@ -537,7 +537,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
                       <button
                         onClick={() => setPodcastSubTab('config')}
-                        className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
                           podcastSubTab === 'config'
                             ? 'bg-brand-card text-brand-textPrimary shadow-sm border border-brand-border'
                             : 'text-brand-textSecondary hover:text-brand-textPrimary'

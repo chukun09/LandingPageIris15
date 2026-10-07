@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
@@ -254,7 +255,7 @@ export const Grid3D = ({
     ? 'flex-1 w-full relative overflow-hidden bg-brand-card border border-brand-border/60 rounded-lg'
     : 'w-full aspect-[16/7] min-h-[300px] sm:min-h-[450px] md:min-h-[550px] overflow-hidden relative rounded-lg border border-brand-border/60 bg-brand-card';
 
-  return (
+  const content = (
     <div className={shell}>
       <div ref={containerRef} className={frame}>
         {targetInfo && (
@@ -358,4 +359,10 @@ export const Grid3D = ({
       )}
     </div>
   );
+
+  // Khi toàn màn hình, render qua portal thẳng vào body để thoát khỏi mọi
+  // ancestor motion.div có transform (fadeUp...) — transform tạo containing
+  // block mới khiến position:fixed bị giới hạn trong section thay vì viewport,
+  // làm nút X (Minimize2) bị trôi ra ngoài tầm nhìn khi cuộn trang.
+  return isFullscreen ? createPortal(content, document.body) : content;
 };
