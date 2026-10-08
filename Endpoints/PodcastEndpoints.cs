@@ -23,7 +23,7 @@ public static class PodcastEndpoints
             CancellationToken ct) =>
         {
             var podcasts = await podcastService.GetPodcastsAsync(ct);
-            httpContext.Response.Headers.CacheControl = "public, max-age=60, stale-while-revalidate=120";
+            httpContext.Response.Headers.CacheControl = "public, max-age=0, must-revalidate";
             return TypedResults.Ok(podcasts);
         })
         .WithName("GetPodcasts")

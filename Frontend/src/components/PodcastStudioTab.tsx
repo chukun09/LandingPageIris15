@@ -148,6 +148,7 @@ export const PodcastStudioTab: React.FC<PodcastStudioTabProps> = ({
       });
       setSelectedPost(null);
       setPodcastTitle('');
+      setTimeout(() => setStatusMessage(null), 8000);
     } catch (err: unknown) {
       setStatusMessage({
         type: 'error',
@@ -194,6 +195,7 @@ export const PodcastStudioTab: React.FC<PodcastStudioTabProps> = ({
       }
       setSelectedPost(null);
       setPodcastTitle('');
+      setTimeout(() => setStatusMessage(null), 8000);
     } catch (err: unknown) {
       setStatusMessage({
         type: 'error',
@@ -275,6 +277,33 @@ export const PodcastStudioTab: React.FC<PodcastStudioTabProps> = ({
         }`}>
           <span>{gpuMessage}</span>
           <button type="button" onClick={() => setGpuMessage('')} className="text-brand-textMuted hover:text-brand-textPrimary">✕</button>
+        </div>
+      )}
+
+      {/* Thông báo kết quả phát hành Podcast */}
+      {statusMessage && (
+        <div
+          className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 text-xs font-semibold shadow-sm transition-all ${
+            statusMessage.type === 'success'
+              ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+              : 'bg-rose-500/15 border-rose-500/30 text-rose-300'
+          }`}
+        >
+          <div className="flex items-center gap-2.5">
+            {statusMessage.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            )}
+            <span>{statusMessage.text}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setStatusMessage(null)}
+            className="text-xs font-bold opacity-75 hover:opacity-100"
+          >
+            ✕
+          </button>
         </div>
       )}
 
@@ -477,23 +506,6 @@ export const PodcastStudioTab: React.FC<PodcastStudioTabProps> = ({
                   </p>
                 </div>
 
-                {/* Notification Banner */}
-                {statusMessage && (
-                  <div
-                    className={`p-3 rounded-xl border flex items-center gap-2 text-xs font-semibold ${
-                      statusMessage.type === 'success'
-                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                        : 'bg-rose-500/10 border-rose-500/30 text-rose-400'
-                    }`}
-                  >
-                    {statusMessage.type === 'success' ? (
-                      <CheckCircle2 className="w-4 h-4 shrink-0" />
-                    ) : (
-                      <AlertCircle className="w-4 h-4 shrink-0" />
-                    )}
-                    <span>{statusMessage.text}</span>
-                  </div>
-                )}
 
                 {/* Action Buttons */}
                 <div className="flex items-center justify-end gap-3 pt-2">
@@ -642,23 +654,6 @@ export const PodcastStudioTab: React.FC<PodcastStudioTabProps> = ({
                 )}
               </div>
 
-              {/* Notification Banner */}
-              {statusMessage && (
-                <div
-                  className={`p-3 rounded-xl border flex items-center gap-2 text-xs font-semibold ${
-                    statusMessage.type === 'success'
-                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                      : 'bg-rose-500/10 border-rose-500/30 text-rose-400'
-                  }`}
-                >
-                  {statusMessage.type === 'success' ? (
-                    <CheckCircle2 className="w-4 h-4 shrink-0" />
-                  ) : (
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                  )}
-                  <span>{statusMessage.text}</span>
-                </div>
-              )}
 
               {/* Action Buttons */}
               <div className="flex items-center justify-end gap-3 pt-2">

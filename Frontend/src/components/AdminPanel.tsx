@@ -55,6 +55,8 @@ interface AdminPanelProps {
   onGeneratePodcast: (id: number, title: string, apiKey: string, region: string) => Promise<void>;
   onUploadPodcast: (formData: FormData) => Promise<void>;
   onDeletePodcast: (id: number) => Promise<void>;
+  adminToken?: string;
+  onAuthExpired?: () => void;
   onOpenBackdropViewer?: () => void;
 }
 
@@ -74,6 +76,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onGeneratePodcast,
   onUploadPodcast,
   onDeletePodcast,
+  adminToken,
+  onAuthExpired,
   onOpenBackdropViewer,
 }) => {
   const [mainTab, setMainTab] = useState<MainTab>('posts');
@@ -788,6 +792,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               {mainTab === 'mosaic' && (
                 <MosaicStudioTab
                   approvedPosts={approvedPosts}
+                  adminToken={adminToken}
+                  onAuthExpired={onAuthExpired}
                   onOpenPreview={(post) => setPreviewPost(post)}
                 />
               )}

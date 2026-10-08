@@ -190,13 +190,14 @@ function App() {
 
   const fetchData = async () => {
     try {
-      const postsRes = await fetch('/api/posts');
+      const ts = Date.now();
+      const postsRes = await fetch(`/api/posts?_t=${ts}`, { cache: 'no-cache' });
       if (postsRes.ok) {
         const postsData = await postsRes.json();
         setApprovedPosts(postsData);
       }
 
-      const podcastsRes = await fetch('/api/podcasts');
+      const podcastsRes = await fetch(`/api/podcasts?_t=${ts}`, { cache: 'no-cache' });
       if (podcastsRes.ok) {
         const podcastsData = await podcastsRes.json();
         setPodcasts(podcastsData);
@@ -211,8 +212,9 @@ function App() {
 
   const fetchPending = async () => {
     try {
-      const res = await fetch('/api/admin/posts/pending', {
+      const res = await fetch(`/api/admin/posts/pending?_t=${Date.now()}`, {
         headers: getAdminHeaders(),
+        cache: 'no-cache',
       });
       if (res.status === 401) {
         handleAuthExpired();
@@ -322,9 +324,8 @@ function App() {
         return;
       }
       if (res.ok) {
-        triggerToast(approve ? 'Đã duyệt đăng kỷ niệm thành công!' : 'Đã xóa bài viết khỏi hàng đợi.');
-        fetchPending();
-        fetchData();
+        triggerToast(approve ? 'Đã duyệt đăng kỷ niệm thành công!' : 'Đã xóa bài viết khỏi hàng đợi.', 'success');
+        await Promise.all([fetchPending(), fetchData()]);
       } else {
         triggerToast('Thao tác admin thất bại.', 'error');
       }
@@ -345,9 +346,8 @@ function App() {
       }
       if (res.ok) {
         const data = await res.json();
-        triggerToast(data.message || `Đã duyệt toàn bộ ${data.count ?? ''} bài viết thành công!`);
-        fetchPending();
-        fetchData();
+        triggerToast(data.message || `Đã duyệt toàn bộ ${data.count ?? ''} bài viết thành công!`, 'success');
+        await Promise.all([fetchPending(), fetchData()]);
       } else {
         triggerToast('Thao tác duyệt tất cả thất bại.', 'error');
       }
@@ -395,7 +395,8 @@ function App() {
       const errText = await res.text();
       throw new Error(errText || 'Thất bại khi yêu cầu máy chủ tạo âm thanh.');
     }
-    fetchData();
+    triggerToast(`Đã tạo thành công Podcast Radio AI: "${title}"!`, 'success');
+    await fetchData();
   };
 
   const handleUploadPodcast = async (formData: FormData) => {
@@ -413,7 +414,7 @@ function App() {
       throw new Error(errText || 'Thất bại khi tải file âm thanh lên máy chủ.');
     }
     triggerToast('Tải lên và phát hành Podcast thành công!', 'success');
-    fetchData();
+    await fetchData();
   };
 
   const handleDeletePodcast = async (id: number) => {
@@ -429,8 +430,8 @@ function App() {
       const errText = await res.text();
       throw new Error(errText || 'Thất bại khi xóa số phát thanh Podcast.');
     }
-    triggerToast('Đã xóa số phát thanh thành công!');
-    fetchData();
+    triggerToast('Đã xóa số phát thanh thành công!', 'success');
+    await fetchData();
   };
 
   const handleDownload = async (audioUrl: string, title: string) => {
@@ -866,6 +867,8 @@ function App() {
             pendingPosts={pendingPosts}
             approvedPosts={approvedPosts}
             podcasts={podcasts}
+            adminToken={adminToken}
+            onAuthExpired={handleAuthExpired}
             onApprove={handleApprovePost}
             onApproveAll={handleApproveAllPosts}
             onTogglePin={handleTogglePin}
@@ -929,10 +932,10 @@ function App() {
         {toast && (
           <motion.div
             key={toast.message + toast.type}
-            className="fixed bottom-6 right-6 z-50"
-            initial={{ opacity: 0, y: 24, scale: 0.95 }}
+            className="fixed top-6 right-6 z-[9999] pointer-events-auto shadow-2xl"
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 12, scale: 0.95 }}
+            exit={{ opacity: 0, y: -16, scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 260, damping: 24 }}
           >
             <div className={`glass-card px-4 py-3 rounded-xl flex items-center gap-2.5 text-xs font-semibold border ${
