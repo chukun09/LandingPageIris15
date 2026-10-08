@@ -79,10 +79,58 @@ def num2words_vi(n: int) -> str:
         
     return " ".join(parts).strip()
 
+def clean_emojis_and_symbols(text: str) -> str:
+    """Loại bỏ toàn bộ emoji, text emoticon, biểu tượng cảm xúc và ký tự trang trí trước khi tổng hợp giọng nói."""
+    if not text:
+        return text
+
+    # 1. Text emoticons thông dụng (<3, </3, (y), (Y), :), :D, ^^, v.v.)
+    text_emoticons = [
+        r'</?3\b', r'<3', r'♡', r'♥',
+        r'\([yYnN]\)',
+        r':[-~]?[)DdpP(\]/\\]+',
+        r';[-~]?[)D(\]/\\]+',
+        r'(\^[-_]?\^|\^\^|-_+|>_<|T_T|@@)',
+    ]
+    for emo in text_emoticons:
+        text = re.sub(emo, ' ', text)
+
+    # 2. Toàn bộ dải Unicode Emoji & Symbols (mặt cười, cử chỉ giơ tay/like, tim, hoa, pháo hoa...)
+    emoji_pattern = re.compile(
+        '['
+        '\U0001F600-\U0001F64F'  # Emoticons / Smileys
+        '\U0001F300-\U0001F5FF'  # Symbols & Pictographs (tim, like, hoa, pháo hoa...)
+        '\U0001F680-\U0001F6FF'  # Transport & Map
+        '\U0001F1E0-\U0001F1FF'  # Flags
+        '\U0001F900-\U0001F9FF'  # Supplemental Symbols (cụng ly, ôm, bắt tay...)
+        '\U0001FA00-\U0001FA6F'  # Chess
+        '\U0001FA70-\U0001FAFF'  # Extended Pictographs (trái tim màu, đồ vật mới...)
+        '\u2600-\u26FF'          # Misc Symbols (sao, mặt trời, ô dù, trái tim đen/trắng...)
+        '\u2700-\u27BF'          # Dingbats (tim đỏ, kéo, bút, dấu tích, sao...)
+        '\uFE00-\uFE0F'          # Variation Selectors
+        '\u200D'                  # Zero Width Joiner
+        '\u20E3'                  # Combining Enclosing Keycap
+        '\u2B50\u2B55\u231A\u231B\u23E9-\u23EC\u23F0\u23F3'  # Sao ⭐, đồng hồ ⏰...
+        ']+', flags=re.UNICODE
+    )
+    text = emoji_pattern.sub(' ', text)
+
+    # 3. Ký tự trang trí, bullet points, ký hiệu code không dùng khi đọc
+    text = re.sub(r'[*~#^_|\\<>{}\[\]=•●◆■★☆►▸▶]+', ' ', text)
+
+    # 4. Gom dấu câu lặp lại: !!! -> !, ??? -> ?, .... -> ...
+    text = re.sub(r'!+', '!', text)
+    text = re.sub(r'\?+', '?', text)
+    text = re.sub(r'\.{4,}', '...', text)
+    return text
+
 def normalize_vietnamese_text(text: str) -> str:
     """Tự động chuyển đổi con số, ký tự đặc biệt và phiên âm thuật ngữ sang tiếng Việt tự nhiên."""
     if not text:
         return text
+
+    # 0. Loại bỏ hoàn toàn emojis, text emoticons và ký tự trang trí
+    text = clean_emojis_and_symbols(text)
 
     # 1. Số thập phân (vd: 4.0 -> bốn chấm không) và dải số (vd: 2-6 -> 2 đến 6)
     text = re.sub(r'(\d+)\.(\d+)', r'\1 chấm \2', text)

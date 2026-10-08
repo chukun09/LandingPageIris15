@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -15,7 +16,7 @@ using LandingPageEvent.Services.TTS;
 
 namespace LandingPageEvent.Services;
 
-public sealed class PodcastService : IPodcastService
+public sealed partial class PodcastService : IPodcastService
 {
     private readonly AppDbContext _context;
     private readonly IEnumerable<ITtsProvider> _ttsProviders;
@@ -118,10 +119,12 @@ public sealed class PodcastService : IPodcastService
         string usedProviderName = primaryProvider.ProviderName;
         string fileExtension = usedProviderName.Equals("ViXtts", StringComparison.OrdinalIgnoreCase) ? "wav" : "mp3";
 
+        var speechText = SanitizeTextForSpeech(post.Message);
+
         try
         {
             _logger.LogInformation("Đang sinh podcast với TTS Provider chính: {ProviderName}", primaryProvider.ProviderName);
-            audioBytes = await primaryProvider.SynthesizeSpeechAsync(post.Message, null, ct);
+            audioBytes = await primaryProvider.SynthesizeSpeechAsync(speechText, null, ct);
         }
         catch (Exception ex) when (enableFallback && !primaryProvider.ProviderName.Equals("Azure", StringComparison.OrdinalIgnoreCase))
         {
@@ -133,7 +136,7 @@ public sealed class PodcastService : IPodcastService
                 throw;
             }
 
-            audioBytes = await fallbackProvider.SynthesizeSpeechAsync(post.Message, null, ct);
+            audioBytes = await fallbackProvider.SynthesizeSpeechAsync(speechText, null, ct);
             usedProviderName = fallbackProvider.ProviderName;
             fileExtension = "mp3";
         }
@@ -387,4 +390,55 @@ public sealed class PodcastService : IPodcastService
         int wordCount = fallbackText.Split(new[] { ' ', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).Length;
         return Math.Max(5, (int)(wordCount / 2.5));
     }
+
+    /// <summary>
+    /// Làm sạch văn bản trước khi gửi sang hệ thống TTS: loại bỏ hoàn toàn emojis, text emoticons, ký tự trang trí.
+    /// </summary>
+    public static string SanitizeTextForSpeech(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return string.Empty;
+        }
+
+        // 1. Loại bỏ text emoticons (<3, </3, (y), (Y), :), :D, ^^, v.v.)
+        var text = TextEmoticonRegex().Replace(input, " ");
+
+        // 2. Loại bỏ toàn bộ dải Unicode Emoji & Symbols
+        text = EmojiRegex().Replace(text, " ");
+
+        // 3. Loại bỏ ký tự trang trí, bullet points, ký hiệu code không lời
+        text = DecorationRegex().Replace(text, " ");
+
+        // 4. Gom dấu câu lặp lại (!!! -> !, ??? -> ?, .... -> ...)
+        text = MultipleExclamationRegex().Replace(text, "!");
+        text = MultipleQuestionRegex().Replace(text, "?");
+        text = MultipleDotRegex().Replace(text, "...");
+
+        // 5. Chuẩn hóa khoảng trắng
+        text = WhitespaceRegex().Replace(text, " ").Trim();
+
+        return string.IsNullOrWhiteSpace(text) ? (input?.Trim() ?? string.Empty) : text;
+    }
+
+    [GeneratedRegex(@"</?3\b|<3|[♡♥]|\([yYnN]\)|:[-~]?[)DdpP(\]/\\|]+|;[-~]?[)D(\]/\\|]+|(\^[-_]?\^|\^\^|-_+|>_<|T_T|@@)", RegexOptions.Compiled)]
+    private static partial Regex TextEmoticonRegex();
+
+    [GeneratedRegex(@"[\uD83C-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27BF]|[\uFE00-\uFE0F]|[\u200D\u20E3\u2B50\u2B55\u231A\u231B\u23E9-\u23EC\u23F0\u23F3]", RegexOptions.Compiled)]
+    private static partial Regex EmojiRegex();
+
+    [GeneratedRegex(@"[*~#^_|\\<>{}\[\]=•●◆■★☆►▸▶]+", RegexOptions.Compiled)]
+    private static partial Regex DecorationRegex();
+
+    [GeneratedRegex(@"!+", RegexOptions.Compiled)]
+    private static partial Regex MultipleExclamationRegex();
+
+    [GeneratedRegex(@"\?+", RegexOptions.Compiled)]
+    private static partial Regex MultipleQuestionRegex();
+
+    [GeneratedRegex(@"\.{4,}", RegexOptions.Compiled)]
+    private static partial Regex MultipleDotRegex();
+
+    [GeneratedRegex(@"\s+", RegexOptions.Compiled)]
+    private static partial Regex WhitespaceRegex();
 }
