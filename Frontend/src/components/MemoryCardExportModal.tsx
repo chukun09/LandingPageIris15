@@ -30,12 +30,25 @@ export const MemoryCardExportModal: React.FC<MemoryCardExportModalProps> = ({
   const [isGenerating, setIsGenerating] = useState(true);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
 
+  // Revoke object URL khi unmount
+  useEffect(() => {
+    return () => {
+      if (downloadUrl && downloadUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(downloadUrl);
+      }
+    };
+  }, [downloadUrl]);
+
   useEffect(() => {
     if (!isOpen || !post) {
-      setDownloadUrl(null);
+      setDownloadUrl((prev) => {
+        if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
+        return null;
+      });
       return;
     }
 
+    let isCancelled = false;
     setIsGenerating(true);
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -267,14 +280,22 @@ export const MemoryCardExportModal: React.FC<MemoryCardExportModalProps> = ({
       ctx.font = '16px "Fira Code", monospace';
       ctx.fillText('www.iris.vn · Tự Hào Chặng Đường Vàng 2011 - 2026', width / 2, 1260);
 
-      setDownloadUrl(canvas.toDataURL('image/png'));
-      setIsGenerating(false);
+      canvas.toBlob((blob) => {
+        if (isCancelled || !blob) return;
+        const blobUrl = URL.createObjectURL(blob);
+        setDownloadUrl((prev) => {
+          if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
+          return blobUrl;
+        });
+        setIsGenerating(false);
+      }, 'image/png');
     };
 
     if (photoUrl) {
       photoImg.src = photoUrl;
-      photoImg.onload = drawRemainingContent;
+      photoImg.onload = () => { if (!isCancelled) drawRemainingContent(); };
       photoImg.onerror = () => {
+        if (isCancelled) return;
         if (fallbackThumbUrl && photoImg.src !== fallbackThumbUrl) {
           photoImg.src = fallbackThumbUrl;
         } else {
@@ -284,6 +305,10 @@ export const MemoryCardExportModal: React.FC<MemoryCardExportModalProps> = ({
     } else {
       drawRemainingContent();
     }
+
+    return () => {
+      isCancelled = true;
+    };
   }, [isOpen, post, cardTheme]);
 
   const handleDownload = () => {

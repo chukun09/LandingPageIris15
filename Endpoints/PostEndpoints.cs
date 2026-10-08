@@ -57,6 +57,11 @@ public static class PostEndpoints
                 return TypedResults.BadRequest("Hình ảnh kỷ niệm là bắt buộc.");
             }
 
+            if (file.Length > 15 * 1024 * 1024)
+            {
+                return TypedResults.BadRequest("Kích thước file ảnh vượt quá giới hạn cho phép (tối đa 15 MB).");
+            }
+
             var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
             if (!imagePolicy.AllowedExtensions.Contains(extension))
             {

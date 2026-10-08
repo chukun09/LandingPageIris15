@@ -91,6 +91,14 @@ h1, h2, h3, h4, h5, h6 {
     @apply rounded-lg;
   }
 
+  @media (hover: none) and (pointer: coarse) {
+    .glass-card {
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+      background: rgb(var(--c-card) / 0.95);
+    }
+  }
+
   .glass-card-hover {
     @apply transition-all duration-200 hover:border-brand-secondary/50;
   }

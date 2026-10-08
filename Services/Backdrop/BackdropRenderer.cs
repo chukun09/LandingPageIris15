@@ -402,7 +402,21 @@ public sealed class BackdropRenderer(
     {
         if (!_o.ShowLogo) return;
 
-        var logoPath = Path.Combine(WebRoot, "LOGO 15th IRIS - FINAL _LOGO 15th IRIS - CHOT2.png");
+        var logoPath = _o.LogoPath;
+        if (!Path.IsPathRooted(logoPath))
+        {
+            var p1 = Path.Combine(Directory.GetCurrentDirectory(), logoPath);
+            var p2 = Path.Combine(AppContext.BaseDirectory, logoPath);
+            var p3 = Path.Combine(WebRoot, logoPath);
+            logoPath = File.Exists(p1) ? p1 : (File.Exists(p2) ? p2 : p3);
+        }
+
+        if (!File.Exists(logoPath))
+        {
+            var fallbackPath = Path.Combine(WebRoot, "brand", "logo-h480.png");
+            if (File.Exists(fallbackPath)) logoPath = fallbackPath;
+        }
+
         if (!File.Exists(logoPath))
         {
             logger.LogWarning("Không tìm thấy file logo tại {Path}; bỏ qua khối logo.", logoPath);

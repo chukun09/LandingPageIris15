@@ -155,4 +155,7 @@ public sealed class BackdropOptions
     /// </summary>
     public int PoolSizeLimitMb { get; set; } = 192;
     public int MaxDegreeOfParallelism { get; set; } = 2;
+
+    /// <summary>Đường dẫn tới file logo bản in chất lượng cao.</summary>
+    public string LogoPath { get; set; } = "Assets/brand/logo-print.png";
 }

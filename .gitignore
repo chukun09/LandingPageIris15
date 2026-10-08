@@ -62,6 +62,7 @@ Frontend/.env.production.local
 # 5. Compiled Static Assets (Frontend Build Output in wwwroot)
 # -------------------------------------------------------------------------
 wwwroot/assets/
+wwwroot/brand/
 wwwroot/index.html
 
 # -------------------------------------------------------------------------

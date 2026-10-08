@@ -354,6 +354,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                   <img
                                     src={post.thumbnailUrl || post.thumbnailImagePath}
                                     alt="thumb"
+                                    width={48}
+                                    height={48}
+                                    loading="lazy"
+                                    decoding="async"
                                     className="w-12 h-12 object-cover rounded-lg border border-brand-border mx-auto"
                                     onError={(e) => {
                                       e.currentTarget.style.display = 'none';
@@ -432,6 +436,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                     <img
                                       src={post.thumbnailUrl || post.thumbnailImagePath}
                                       alt="thumb"
+                                      width={48}
+                                      height={48}
+                                      loading="lazy"
+                                      decoding="async"
                                       className="w-12 h-12 object-cover rounded-lg border border-brand-border mx-auto"
                                       onError={(e) => {
                                         e.currentTarget.style.display = 'none';

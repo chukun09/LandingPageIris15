@@ -324,6 +324,10 @@ export const PodcastStudioTab: React.FC<PodcastStudioTabProps> = ({
                       <img
                         src={imgUrl}
                         alt="Post thumb"
+                        width={48}
+                        height={48}
+                        loading="lazy"
+                        decoding="async"
                         className="w-12 h-12 rounded-xl object-cover border border-brand-border/60 shrink-0"
                       />
                     ) : (

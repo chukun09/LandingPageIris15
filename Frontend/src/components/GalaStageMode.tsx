@@ -86,11 +86,16 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
       <header className="relative z-10 p-3 sm:p-6 md:p-8 flex items-center justify-between gap-3 border-b border-white/10 bg-slate-950/60 backdrop-blur-md">
         <div className="flex items-center gap-2 sm:gap-4 min-w-0">
           <div className="bg-white/95 rounded-xl px-2 py-1 sm:px-3 sm:py-1.5 shadow-md shrink-0">
-            <img
-              src="/LOGO 15th IRIS - FINAL _LOGO 15th IRIS - CHOT2.png"
-              alt="15th IRIS"
-              className="h-7 sm:h-10 md:h-12 w-auto object-contain"
-            />
+            <picture>
+              <source srcSet="/brand/logo-h480.webp" type="image/webp" />
+              <img
+                src="/brand/logo-h480.png"
+                alt="15th IRIS"
+                width={661}
+                height={480}
+                className="h-7 sm:h-10 md:h-12 w-auto object-contain"
+              />
+            </picture>
           </div>
           <div className="min-w-0">
             <span className="text-[9px] sm:text-[11px] font-mono tracking-widest text-amber-400 font-bold uppercase hidden sm:block">

@@ -614,6 +614,10 @@ public sealed class PostService : IPostService
             var sourcePath = File.Exists(localOriginalPath) ? localOriginalPath : item.TempFilePath;
 
             using var baseImage = await Image.LoadAsync(_imagePolicy.Configuration, sourcePath, ct);
+            baseImage.Mutate(x => x.AutoOrient());
+            baseImage.Metadata.ExifProfile = null;
+            baseImage.Metadata.XmpProfile = null;
+            baseImage.Metadata.IptcProfile = null;
 
             // 2a. Sinh Preview giữ nguyên tỉ lệ gốc (tối đa 1600px, WebP Q82)
             using var previewStream = new MemoryStream();

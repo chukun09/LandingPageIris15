@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { X, UploadCloud, AlertCircle, Sparkles } from 'lucide-react';
 import { ModalShell } from './ModalShell';
+import { resizeImageForUpload } from '../lib/resizeImage';
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -17,8 +18,18 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onSub
   const [isDragOver, setIsDragOver] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [statusText, setStatusText] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Revoke object URL khi unmount hoặc đổi file
+  useEffect(() => {
+    return () => {
+      if (filePreview && filePreview.startsWith('blob:')) {
+        URL.revokeObjectURL(filePreview);
+      }
+    };
+  }, [filePreview]);
 
   // Reset form when modal closes
   useEffect(() => {
@@ -26,9 +37,13 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onSub
       setMessage('');
       setDepartment('');
       setFile(null);
+      if (filePreview && filePreview.startsWith('blob:')) {
+        URL.revokeObjectURL(filePreview);
+      }
       setFilePreview(null);
       setErrorMsg('');
       setIsSubmitting(false);
+      setStatusText('');
     }
   }, [isOpen]);
 
@@ -40,20 +55,26 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onSub
     if (!allowed.includes(extension)) {
       setErrorMsg('Định dạng ảnh không hợp lệ. Chỉ chấp nhận JPG, JPEG, PNG, WEBP.');
       setFile(null);
+      if (filePreview && filePreview.startsWith('blob:')) {
+        URL.revokeObjectURL(filePreview);
+      }
       setFilePreview(null);
+      return;
+    }
+
+    if (selectedFile.size > 15 * 1024 * 1024) {
+      setErrorMsg('Kích thước ảnh vượt quá giới hạn 15MB. Vui lòng chọn ảnh nhỏ hơn.');
       return;
     }
 
     setErrorMsg('');
     setFile(selectedFile);
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      if (e.target && typeof e.target.result === 'string') {
-        setFilePreview(e.target.result);
-      }
-    };
-    reader.readAsDataURL(selectedFile);
+    if (filePreview && filePreview.startsWith('blob:')) {
+      URL.revokeObjectURL(filePreview);
+    }
+    const previewUrl = URL.createObjectURL(selectedFile);
+    setFilePreview(previewUrl);
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -71,13 +92,24 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onSub
 
     setIsSubmitting(true);
     setErrorMsg('');
+    setStatusText('Đang tối ưu ảnh...');
     try {
-      const success = await onSubmit(message, department, file);
+      // 1. Thu nhỏ ảnh phía client trước khi upload (cạnh dài <= 2560px, JPEG Q88)
+      const resizeResult = await resizeImageForUpload(file);
+      let uploadFile = file;
+      if (resizeResult.isResized) {
+        const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || 'photo';
+        uploadFile = new File([resizeResult.blob], `${baseName}.jpg`, { type: 'image/jpeg' });
+      }
+
+      setStatusText('Đang gửi...');
+      const success = await onSubmit(message, department, uploadFile);
       if (success) onClose();
     } catch {
       setErrorMsg('Có lỗi xảy ra khi tải lên. Vui lòng thử lại.');
     } finally {
       setIsSubmitting(false);
+      setStatusText('');
     }
   };
 
@@ -188,7 +220,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onSub
                 Kéo thả file ảnh hoặc click vào đây để chọn
               </p>
               <p className="text-[10px] text-brand-textMuted mt-1">
-                Hỗ trợ JPG, JPEG, PNG, WEBP (Tối đa 10MB)
+                Hỗ trợ JPG, JPEG, PNG, WEBP (Tối đa 15MB, tự động tối ưu hóa)
               </p>
             </motion.div>
           </div>
@@ -207,7 +239,14 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onSub
                   <img src={filePreview} alt="Preview" className="w-full h-full object-contain" />
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); setFile(null); setFilePreview(null); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setFile(null);
+                      if (filePreview && filePreview.startsWith('blob:')) {
+                        URL.revokeObjectURL(filePreview);
+                      }
+                      setFilePreview(null);
+                    }}
                     className="absolute top-2 right-2 bg-slate-900/60 backdrop-blur-sm text-white hover:bg-slate-900 p-1 rounded-full transition-colors"
                   >
                     <X className="w-4 h-4" />
@@ -236,7 +275,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onSub
               {isSubmitting ? (
                 <>
                   <div className="w-3.5 h-3.5 border-2 border-slate-900/70 border-t-transparent rounded-full animate-spin" />
-                  Đang gửi...
+                  {statusText || 'Đang gửi...'}
                 </>
               ) : (
                 'Gửi lời chúc'

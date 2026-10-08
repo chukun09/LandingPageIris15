@@ -1,8 +1,7 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useDeferredValue } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Search, Heart, Filter, Calendar, ChevronLeft, ChevronRight, Sparkles, Download, MapPin, Pin, Flame, Clock } from 'lucide-react';
 import { staggerContainer, fadeUp, sectionViewport } from '../lib/motion';
-import { fireCelebration } from './CelebrationConfetti';
 
 interface Post {
   id: number;
@@ -25,7 +24,7 @@ interface MemoryWallProps {
   selectedDepartment?: string;
 }
 
-export const MemoryWall: React.FC<MemoryWallProps> = ({
+const MemoryWallComponent: React.FC<MemoryWallProps> = ({
   posts,
   onVote,
   onCardClick,
@@ -34,6 +33,7 @@ export const MemoryWall: React.FC<MemoryWallProps> = ({
   selectedDepartment,
 }) => {
   const [search, setSearch] = useState('');
+  const deferredSearch = useDeferredValue(search);
   const [deptFilter, setDeptFilter] = useState(selectedDepartment || 'All');
   const [sortBy, setSortBy] = useState<'votes' | 'date'>('votes');
   const [currentPage, setCurrentPage] = useState(1);
@@ -48,7 +48,7 @@ export const MemoryWall: React.FC<MemoryWallProps> = ({
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, deptFilter, sortBy]);
+  }, [deferredSearch, deptFilter, sortBy]);
 
   const departments = useMemo(() => {
     const list = new Set<string>();
@@ -62,8 +62,8 @@ export const MemoryWall: React.FC<MemoryWallProps> = ({
 
   const filteredAndSortedPosts = useMemo(() => {
     let result = [...posts];
-    if (search.trim()) {
-      const q = search.toLowerCase();
+    if (deferredSearch.trim()) {
+      const q = deferredSearch.toLowerCase();
       result = result.filter(p =>
         p.message.toLowerCase().includes(q) ||
         (p.department && p.department.toLowerCase().includes(q))
@@ -88,7 +88,7 @@ export const MemoryWall: React.FC<MemoryWallProps> = ({
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
     return result;
-  }, [posts, search, deptFilter, sortBy]);
+  }, [posts, deferredSearch, deptFilter, sortBy]);
 
   const paginatedPosts = useMemo(() => {
     const startIndex = (currentPage - 1) * POSTS_PER_PAGE;
@@ -109,7 +109,7 @@ export const MemoryWall: React.FC<MemoryWallProps> = ({
     }
   };
 
-  const gridKey = `${currentPage}-${deptFilter}-${search}-${sortBy}`;
+  const gridKey = `${currentPage}-${deptFilter}-${deferredSearch}-${sortBy}`;
 
   return (
     <div className="w-full">
@@ -191,7 +191,7 @@ export const MemoryWall: React.FC<MemoryWallProps> = ({
         </div>
       ) : (
         <div className="space-y-8">
-          <AnimatePresence mode="popLayout">
+          <AnimatePresence mode="wait">
             <motion.div
               key={gridKey}
               className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
@@ -203,7 +203,6 @@ export const MemoryWall: React.FC<MemoryWallProps> = ({
               {paginatedPosts.map((post) => (
                 <motion.div
                   key={post.id}
-                  layout
                   variants={fadeUp}
                   className={`card-premium card-polaroid flex flex-col justify-between overflow-hidden group cursor-pointer border rounded-2xl bg-brand-card shadow-sm transition-all duration-300 ${
                     post.isPinned
@@ -220,14 +219,14 @@ export const MemoryWall: React.FC<MemoryWallProps> = ({
                       </div>
                     )}
                     <img
-                      src={post.previewUrl || `/api/posts/${post.id}/preview`}
+                      src={post.thumbnailUrl || post.thumbnailImagePath || `/api/posts/${post.id}/thumbnail`}
                       alt="Memory photo"
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       loading="lazy"
                       decoding="async"
                       onError={(e) => {
-                        const fallback = post.thumbnailUrl || post.thumbnailImagePath || `/api/posts/${post.id}/thumbnail`;
-                        if (fallback && !e.currentTarget.src.endsWith(fallback)) {
+                        const fallback = post.previewUrl || `/api/posts/${post.id}/preview`;
+                        if (fallback && !e.currentTarget.src.includes(fallback)) {
                           e.currentTarget.src = fallback;
                         } else {
                           e.currentTarget.style.display = 'none';
@@ -287,7 +286,6 @@ export const MemoryWall: React.FC<MemoryWallProps> = ({
                         <motion.button
                           onClick={(e) => {
                             e.stopPropagation();
-                            fireCelebration(e.clientX, e.clientY);
                             onVote(post.id);
                           }}
                           className="flex items-center gap-1.5 bg-brand-danger/5 hover:bg-brand-danger hover:text-white border border-brand-danger/25 text-brand-danger font-bold font-fira px-3 py-1.5 rounded-full text-[10px] transition-all duration-300"
@@ -353,3 +351,5 @@ export const MemoryWall: React.FC<MemoryWallProps> = ({
     </div>
   );
 };
+
+export const MemoryWall = React.memo(MemoryWallComponent);

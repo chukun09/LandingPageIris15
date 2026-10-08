@@ -117,12 +117,16 @@ public sealed class MosaicSourceCache(
             using (stream)
             using (var image = await Image.LoadAsync<Rgb24>(imagePolicy.Configuration, stream, ct))
             {
-                image.Mutate(x => x.Resize(new ResizeOptions
+                image.Mutate(x =>
                 {
-                    Size = new Size(_o.SourceCacheEdgePx, _o.SourceCacheEdgePx),
-                    Mode = ResizeMode.Crop,
-                    Sampler = KnownResamplers.Lanczos3,
-                }));
+                    x.AutoOrient();
+                    x.Resize(new ResizeOptions
+                    {
+                        Size = new Size(_o.SourceCacheEdgePx, _o.SourceCacheEdgePx),
+                        Mode = ResizeMode.Crop,
+                        Sampler = KnownResamplers.Lanczos3,
+                    });
+                });
 
                 await using var fileStream = new FileStream(cached, FileMode.Create, FileAccess.Write, FileShare.None);
                 await image.SaveAsync(fileStream, new JpegEncoder { Quality = 90 }, ct);

@@ -5,8 +5,14 @@ export default {
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
   darkMode: 'class',
+  future: {
+    hoverOnlyWhenSupported: true,
+  },
   theme: {
     extend: {
+      screens: {
+        touch: { raw: '(hover: none) and (pointer: coarse)' },
+      },
       colors: {
         brand: {
           bg:            'rgb(var(--c-bg) / <alpha-value>)',

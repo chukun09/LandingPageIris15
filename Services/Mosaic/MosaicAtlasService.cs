@@ -148,12 +148,16 @@ public sealed class MosaicAtlasService(
                 using (stream)
                 using (var tile = await Image.LoadAsync<Rgba32>(configuration, stream, ct))
                 {
-                    tile.Mutate(x => x.Resize(new ResizeOptions
+                    tile.Mutate(x =>
                     {
-                        Size = new Size(tileSize, tileSize),
-                        Mode = ResizeMode.Crop,
-                        Sampler = KnownResamplers.Lanczos3,
-                    }));
+                        x.AutoOrient();
+                        x.Resize(new ResizeOptions
+                        {
+                            Size = new Size(tileSize, tileSize),
+                            Mode = ResizeMode.Crop,
+                            Sampler = KnownResamplers.Lanczos3,
+                        });
+                    });
 
                     int column = i % columns;
                     int row = i / columns;

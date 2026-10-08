@@ -59,6 +59,14 @@ else
 
 // 2. Đăng ký Caching, HttpClient và các Service nghiệp vụ
 builder.Services.AddMemoryCache();
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = 20 * 1024 * 1024;
+});
+builder.WebHost.ConfigureKestrel(serverOptions =>
+{
+    serverOptions.Limits.MaxRequestBodySize = 20 * 1024 * 1024;
+});
 builder.Services.AddHttpClient("ViXttsClient", client =>
 {
     client.Timeout = TimeSpan.FromSeconds(120); // Timeout cho ViXTTS GPU Synthesis (tránh timeout khi Modal container cold start)

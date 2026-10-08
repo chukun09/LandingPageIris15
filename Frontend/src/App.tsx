@@ -283,7 +283,9 @@ function App() {
       if (res.ok) {
         fireCelebration();
         triggerToast('Tải lên thành công! Kỷ niệm đang xếp hàng chờ duyệt.', 'info');
-        fetchPending();
+        if (adminToken) {
+          fetchPending();
+        }
         return true;
       } else {
         const errText = await parseApiError(res, 'Tải lên thất bại. Vui lòng kiểm tra lại.');
@@ -425,15 +427,21 @@ function App() {
       <div className="fixed inset-0 light-table-grid opacity-60 dark:opacity-25 pointer-events-none z-0" aria-hidden />
 
       {/* Sticky Header */}
-      <header className="sticky top-0 bg-brand-card/70 backdrop-blur-xl border-b border-brand-border/70 dark:border-brand-secondary/15 shadow-sm z-40">
+      <header className="sticky top-0 bg-brand-card/70 backdrop-blur-xl touch:backdrop-blur-none touch:bg-brand-card/95 border-b border-brand-border/70 dark:border-brand-secondary/15 shadow-sm z-40">
         <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="dark:bg-white/90 dark:rounded-xl dark:px-2 dark:py-1">
-              <img
-                src="/LOGO 15th IRIS - FINAL _LOGO 15th IRIS - CHOT2.png"
-                alt="15th IRIS Logo"
-                className="h-10 w-auto object-contain"
-              />
+              <picture>
+                <source srcSet="/brand/logo-h120.webp" type="image/webp" />
+                <img
+                  src="/brand/logo-h120.png"
+                  alt="15th IRIS Logo"
+                  width={165}
+                  height={120}
+                  fetchPriority="high"
+                  className="h-10 w-auto object-contain"
+                />
+              </picture>
             </div>
           </div>
 
