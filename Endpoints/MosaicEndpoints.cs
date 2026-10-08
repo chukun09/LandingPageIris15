@@ -24,23 +24,34 @@ public static class MosaicEndpoints
             HttpContext http,
             IPostService postService,
             IMosaicLayoutService layoutService,
+            IMosaicPublishService publishService,
             [FromQuery] string? mode,
             CancellationToken ct) =>
         {
-            MosaicLayoutMode? requested = null;
-            if (!string.IsNullOrWhiteSpace(mode))
+            // Ưu tiên bản bố cục đã xuất bản nếu không có yêu cầu đổi mode
+            MosaicLayout? layout = null;
+            if (string.IsNullOrWhiteSpace(mode))
             {
-                if (!Enum.TryParse<MosaicLayoutMode>(mode, ignoreCase: true, out var parsed))
-                {
-                    return TypedResults.Problem(
-                        detail: $"Bố cục '{mode}' không hợp lệ. Chọn: inline, stacked, digitsOnly.",
-                        statusCode: StatusCodes.Status400BadRequest);
-                }
-                requested = parsed;
+                layout = await publishService.GetPublishedLayoutAsync(ct);
             }
 
-            var posts = await postService.GetMosaicPostRefsAsync(ct);
-            var layout = layoutService.Build(posts, requested);
+            if (layout == null)
+            {
+                MosaicLayoutMode? requested = null;
+                if (!string.IsNullOrWhiteSpace(mode))
+                {
+                    if (!Enum.TryParse<MosaicLayoutMode>(mode, ignoreCase: true, out var parsed))
+                    {
+                        return TypedResults.Problem(
+                            detail: $"Bố cục '{mode}' không hợp lệ. Chọn: inline, stacked, digitsOnly.",
+                            statusCode: StatusCodes.Status400BadRequest);
+                    }
+                    requested = parsed;
+                }
+
+                var posts = await postService.GetMosaicPostRefsAsync(ct);
+                layout = layoutService.Build(posts, requested);
+            }
 
             // layoutId đã băm toàn bộ tham số + danh sách ảnh, nên dùng thẳng làm ETag.
             var etag = $"\"{layout.LayoutId}\"";
@@ -60,13 +71,18 @@ public static class MosaicEndpoints
         group.MapGet("/atlas", async Task<Results<FileContentHttpResult, StatusCodeHttpResult, ProblemHttpResult>> (
             HttpContext http,
             IMosaicAtlasService atlasService,
+            IMosaicPublishService publishService,
             [FromQuery] int? tile,
+            [FromQuery] string? v,
             CancellationToken ct) =>
         {
-            MosaicAtlas atlas;
+            int tileSize = tile ?? 128;
+            MosaicAtlas? atlas;
             try
             {
-                atlas = await atlasService.GetAsync(tile ?? 128, ct);
+                // Ưu tiên bản Atlas tĩnh độ phân giải cao đã được Admin xuất bản
+                atlas = await publishService.GetPublishedAtlasAsync(tileSize, ct)
+                        ?? await atlasService.GetAsync(tileSize, ct);
             }
             catch (ArgumentException ex)
             {
@@ -78,9 +94,17 @@ public static class MosaicEndpoints
                 return TypedResults.StatusCode(StatusCodes.Status304NotModified);
 
             http.Response.Headers.ETag = atlas.ETag;
-            // Nội dung đã được băm vào ETag; trình duyệt vẫn phải hỏi lại vì URL
-            // không mang mã băm, nhưng 304 chỉ tốn vài chục byte.
-            http.Response.Headers.CacheControl = "public, max-age=0, must-revalidate";
+
+            // Nếu URL mang mã version v: cho phép Cloudflare CDN và trình duyệt cache vĩnh viễn (immutable)
+            if (!string.IsNullOrWhiteSpace(v))
+            {
+                http.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+            }
+            else
+            {
+                http.Response.Headers.CacheControl = "public, max-age=0, must-revalidate";
+            }
+
             http.Response.Headers["X-Atlas-Tile"] = atlas.TileSize.ToString();
             http.Response.Headers["X-Atlas-Grid"] = $"{atlas.Columns}x{atlas.Rows}";
             http.Response.Headers["X-Atlas-Count"] = atlas.PhotoCount.ToString();

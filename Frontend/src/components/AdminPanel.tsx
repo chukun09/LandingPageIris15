@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { ModalShell } from './ModalShell';
 import { PodcastStudioTab } from './PodcastStudioTab';
+import { MosaicStudioTab } from './MosaicStudioTab';
 
 interface PendingPost {
   id: number;
@@ -57,7 +58,7 @@ interface AdminPanelProps {
   onOpenBackdropViewer?: () => void;
 }
 
-type MainTab = 'posts' | 'podcasts' | 'backdrop';
+type MainTab = 'posts' | 'mosaic' | 'podcasts' | 'backdrop';
 type PostsSubTab = 'pending' | 'approved';
 type PodcastSubTab = 'studio' | 'list' | 'config';
 
@@ -255,6 +256,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   {approvedPosts.length}
                 </span>
               )}
+            </button>
+
+            <button
+              onClick={() => setMainTab('mosaic')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs transition-all whitespace-nowrap shrink-0 ${
+                mainTab === 'mosaic'
+                  ? 'bg-brand-card text-brand-textPrimary shadow-sm border border-brand-border'
+                  : 'text-brand-textSecondary hover:text-brand-textPrimary hover:bg-brand-surface'
+              }`}
+            >
+              <Sparkles className={`w-4 h-4 shrink-0 ${mainTab === 'mosaic' ? 'text-amber-400' : 'text-brand-textMuted'}`} />
+              <span>Bố Cục Khảm 3D</span>
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-brand-surfaceHover text-brand-textSecondary">
+                {approvedPosts.length} ảnh
+              </span>
             </button>
 
             <button
@@ -766,6 +782,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     </div>
                   )}
                 </div>
+              )}
+
+              {/* MODULE: MOSAIC STUDIO */}
+              {mainTab === 'mosaic' && (
+                <MosaicStudioTab
+                  approvedPosts={approvedPosts}
+                  onOpenPreview={(post) => setPreviewPost(post)}
+                />
               )}
 
               {/* MODULE 3: BACKDROP PRINTING */}

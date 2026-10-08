@@ -42,7 +42,7 @@ export function MosaicMesh({
   const { gl, camera, size, invalidate } = useThree();
 
   const tileSize = lowTier ? 64 : 128;
-  const { atlas, placeholder } = useAtlasTexture(tileSize, geometry.photoCount);
+  const { atlas, placeholder } = useAtlasTexture(tileSize, geometry.photoCount, geometry.layoutId);
 
   const boxGeometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), []);
   const atlasMaterial = useMemo(() => createAtlasMaterial(placeholder), [placeholder]);

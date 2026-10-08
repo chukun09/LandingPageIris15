@@ -40,7 +40,7 @@ const cancelIdle: (handle: number) => void =
  * cuối cùng về. Ở đây khung 3D dựng ngay với texture giữ chỗ, atlas về sau thì
  * chỉ là một lần thay ảnh của cùng một texture — không biên dịch lại shader.
  */
-export function useAtlasTexture(tileSize: number, photoCount: number) {
+export function useAtlasTexture(tileSize: number, photoCount: number, layoutId?: string) {
   const gl = useThree((state) => state.gl);
   const [placeholder] = useState(makePlaceholder);
   const [atlas, setAtlas] = useState<AtlasInfo | null>(null);
@@ -56,7 +56,10 @@ export function useAtlasTexture(tileSize: number, photoCount: number) {
     let cancelled = false;
 
     (async () => {
-      const res = await fetch(`/api/mosaic/atlas?tile=${tileSize}`, { signal: controller.signal });
+      const url = layoutId
+        ? `/api/mosaic/atlas?tile=${tileSize}&v=${encodeURIComponent(layoutId)}`
+        : `/api/mosaic/atlas?tile=${tileSize}`;
+      const res = await fetch(url, { signal: controller.signal });
       if (!res.ok) throw new Error(`Không tải được atlas (HTTP ${res.status})`);
       const blob = await res.blob();
       if (cancelled) return;

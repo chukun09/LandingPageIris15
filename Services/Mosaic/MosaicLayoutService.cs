@@ -10,7 +10,10 @@ namespace LandingPageEvent.Services.Mosaic;
 public interface IMosaicLayoutService
 {
     /// <summary>Dựng bố cục có đúng một ô cho mỗi ảnh.</summary>
-    MosaicLayout Build(IReadOnlyList<MosaicPostRef> posts, MosaicLayoutMode? modeOverride = null);
+    MosaicLayout Build(
+        IReadOnlyList<MosaicPostRef> posts,
+        MosaicLayoutMode? modeOverride = null,
+        IReadOnlyList<int>? customOrder = null);
 
     /// <summary>Số ô tối thiểu (và tối đa) mà bố cục hiện tại hỗ trợ.</summary>
     (int Min, int Max) Capacity(MosaicLayoutMode? modeOverride = null);
@@ -21,17 +24,38 @@ public sealed class MosaicLayoutService(IOptions<MosaicOptions> options) : IMosa
     private readonly MosaicOptions _o = options.Value;
     private readonly ConcurrentDictionary<string, MosaicLayout> _cache = new();
 
-    public MosaicLayout Build(IReadOnlyList<MosaicPostRef> posts, MosaicLayoutMode? modeOverride = null)
+    public MosaicLayout Build(
+        IReadOnlyList<MosaicPostRef> posts,
+        MosaicLayoutMode? modeOverride = null,
+        IReadOnlyList<int>? customOrder = null)
     {
         var mode = modeOverride ?? _o.LayoutMode;
         int n = posts.Count;
 
-        // Ảnh được sắp xếp trước để layoutId phản ánh đúng thứ tự gán.
-        var ordered = posts
-            .OrderByDescending(p => p.VoteCount)
-            .ThenBy(p => p.CreatedAt)
-            .ThenBy(p => p.Id)
-            .ToList();
+        // Nếu có thứ tự tùy chỉnh do Ban Tổ Chức (Admin) sắp xếp, tôn trọng thứ tự đó
+        List<MosaicPostRef> ordered;
+        if (customOrder != null && customOrder.Count > 0)
+        {
+            var rankMap = customOrder
+                .Select((id, idx) => (id, idx))
+                .ToDictionary(x => x.id, x => x.idx);
+
+            ordered = posts
+                .OrderBy(p => rankMap.TryGetValue(p.Id, out var idx) ? idx : int.MaxValue)
+                .ThenByDescending(p => p.VoteCount)
+                .ThenBy(p => p.CreatedAt)
+                .ThenBy(p => p.Id)
+                .ToList();
+        }
+        else
+        {
+            // Mặc định: sắp xếp theo số vote, ngày tạo, Id để layoutId phản ánh đúng thứ tự gán.
+            ordered = posts
+                .OrderByDescending(p => p.VoteCount)
+                .ThenBy(p => p.CreatedAt)
+                .ThenBy(p => p.Id)
+                .ToList();
+        }
 
         // Chữ ký hình học phải nằm trong layoutId. Nếu chỉ băm các tham số cấu
         // hình thì sửa dáng chữ trong mã nguồn sẽ cho ra đúng layoutId cũ, ETag

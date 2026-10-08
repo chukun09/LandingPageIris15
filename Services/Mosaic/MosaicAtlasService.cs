@@ -121,8 +121,8 @@ public sealed class MosaicAtlasService(
             Stream? stream = null;
             try
             {
-                stream = await postService.GetPreviewStreamAsync(postId, ct)
-                         ?? await postService.GetThumbnailStreamAsync(postId, ct);
+                stream = await postService.GetThumbnailStreamAsync(postId, ct)
+                         ?? await postService.GetPreviewStreamAsync(postId, ct);
 
                 if (stream == null) continue;
 

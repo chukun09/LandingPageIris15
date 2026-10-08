@@ -253,6 +253,46 @@ public static class AdminEndpoints
         .WithName("WarmupViXtts")
         .WithSummary("Khởi động Container Modal ViXTTS")
         .WithDescription("Gửi request tới /healthz của Modal để đánh thức GPU container từ trạng thái ngủ, tránh timeout 60s khi tạo podcast.");
+
+        // 7. Bố cục và Xuất bản Khảm 3D (Mosaic)
+        protectedGroup.MapGet("/mosaic/state", async Task<Ok<LandingPageEvent.Services.Mosaic.MosaicPublishStateDto>> (
+            LandingPageEvent.Services.Mosaic.IMosaicPublishService publishService,
+            CancellationToken ct) =>
+        {
+            var state = await publishService.GetStateAsync(ct);
+            return TypedResults.Ok(state);
+        })
+        .WithName("GetMosaicPublishState")
+        .WithSummary("Lấy trạng thái và cấu hình sắp xếp Mosaic")
+        .WithDescription("Trả về thông tin vị trí các ảnh trên chữ IRIS 15 và trạng thái xuất bản.");
+
+        protectedGroup.MapPost("/mosaic/publish", async Task<Results<Ok<LandingPageEvent.Services.Mosaic.MosaicPublishStateDto>, BadRequest<string>>> (
+            [FromBody] PublishMosaicRequest request,
+            LandingPageEvent.Services.Mosaic.IMosaicPublishService publishService,
+            CancellationToken ct) =>
+        {
+            if (request.OrderedPostIds == null || request.OrderedPostIds.Count == 0)
+            {
+                return TypedResults.BadRequest("Danh sách thứ tự bài viết không được để trống.");
+            }
+
+            var state = await publishService.PublishAsync(request.OrderedPostIds, ct);
+            return TypedResults.Ok(state);
+        })
+        .WithName("PublishMosaic")
+        .WithSummary("Lưu và xuất bản Bố cục Mosaic")
+        .WithDescription("Sinh file Atlas WebP tĩnh chất lượng cao từ ảnh Preview 1600px và lưu trữ vĩnh viễn trên R2.");
+
+        protectedGroup.MapPost("/mosaic/reset-default", async Task<Ok<LandingPageEvent.Services.Mosaic.MosaicPublishStateDto>> (
+            LandingPageEvent.Services.Mosaic.IMosaicPublishService publishService,
+            CancellationToken ct) =>
+        {
+            var state = await publishService.ResetToDefaultAsync(ct);
+            return TypedResults.Ok(state);
+        })
+        .WithName("ResetMosaicDefault")
+        .WithSummary("Khôi phục Bố cục Mosaic về tự động")
+        .WithDescription("Xoá cấu hình tuỳ chỉnh và tính lại thứ tự theo số lượt bình chọn.");
     }
 }
 
@@ -313,3 +353,8 @@ public sealed record PinPostRequest(bool? IsPinned);
 /// Kết quả duyệt toàn bộ bài viết.
 /// </summary>
 public sealed record ApproveAllResponse(int Count, string Message);
+
+/// <summary>
+/// Yêu cầu xuất bản bố cục Mosaic.
+/// </summary>
+public sealed record PublishMosaicRequest(List<int> OrderedPostIds);

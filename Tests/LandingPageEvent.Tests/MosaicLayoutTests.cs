@@ -287,6 +287,34 @@ public class MosaicLayoutTests
         Assert.NotEqual(a, b);
     }
 
+    [Fact]
+    public void Custom_order_changes_layout_id()
+    {
+        var service = NewService();
+        var posts = Posts(60);
+
+        var defaultLayout = service.Build(posts);
+        var customOrder = posts.Select(p => p.Id).Reverse().ToList();
+        var customLayout = service.Build(posts, customOrder: customOrder);
+
+        Assert.NotEqual(defaultLayout.LayoutId, customLayout.LayoutId);
+    }
+
+    [Fact]
+    public void Custom_order_assigns_top_rank_to_first_item_in_custom_order()
+    {
+        var service = NewService();
+        var posts = Posts(60);
+        int vipPostId = posts[^1].Id; // lấy bài cuối cùng đặt lên đầu
+        var customOrder = new List<int> { vipPostId };
+        customOrder.AddRange(posts.Where(p => p.Id != vipPostId).Select(p => p.Id));
+
+        var layout = service.Build(posts, customOrder: customOrder);
+        var rankZeroTile = layout.Tiles.Single(t => t.Rank == 0);
+
+        Assert.Equal(vipPostId, rankZeroTile.PostId);
+    }
+
     private static string Fingerprint(MosaicLayout layout) =>
         string.Join(';', layout.Tiles.Select(t =>
             $"{t.Index}:{t.Unit.X},{t.Unit.Y},{t.Unit.W},{t.Unit.H},{t.LetterId},{t.PostId},{t.Rank}"));

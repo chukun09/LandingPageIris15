@@ -90,6 +90,8 @@ builder.Services.AddSingleton<LandingPageEvent.Services.Mosaic.IMosaicLayoutServ
                               LandingPageEvent.Services.Mosaic.MosaicLayoutService>();
 builder.Services.AddSingleton<LandingPageEvent.Services.Mosaic.IMosaicAtlasService,
                               LandingPageEvent.Services.Mosaic.MosaicAtlasService>();
+builder.Services.AddSingleton<LandingPageEvent.Services.Mosaic.IMosaicPublishService,
+                              LandingPageEvent.Services.Mosaic.MosaicPublishService>();
 
 // Pipeline dựng file in backdrop: đồng thời đúng một job vì mỗi job giữ một
 // khung ảnh hàng trăm megabyte.
