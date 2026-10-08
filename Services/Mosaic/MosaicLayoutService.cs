@@ -13,7 +13,8 @@ public interface IMosaicLayoutService
     MosaicLayout Build(
         IReadOnlyList<MosaicPostRef> posts,
         MosaicLayoutMode? modeOverride = null,
-        IReadOnlyList<int>? customOrder = null);
+        IReadOnlyList<int>? customOrder = null,
+        IReadOnlyDictionary<int, int>? customTileAssignments = null);
 
     /// <summary>Số ô tối thiểu (và tối đa) mà bố cục hiện tại hỗ trợ.</summary>
     (int Min, int Max) Capacity(MosaicLayoutMode? modeOverride = null);
@@ -27,7 +28,8 @@ public sealed class MosaicLayoutService(IOptions<MosaicOptions> options) : IMosa
     public MosaicLayout Build(
         IReadOnlyList<MosaicPostRef> posts,
         MosaicLayoutMode? modeOverride = null,
-        IReadOnlyList<int>? customOrder = null)
+        IReadOnlyList<int>? customOrder = null,
+        IReadOnlyDictionary<int, int>? customTileAssignments = null)
     {
         var mode = modeOverride ?? _o.LayoutMode;
         int n = posts.Count;
@@ -38,7 +40,8 @@ public sealed class MosaicLayoutService(IOptions<MosaicOptions> options) : IMosa
         {
             var rankMap = customOrder
                 .Select((id, idx) => (id, idx))
-                .ToDictionary(x => x.id, x => x.idx);
+                .GroupBy(x => x.id)
+                .ToDictionary(g => g.Key, g => g.First().idx);
 
             ordered = posts
                 .OrderBy(p => rankMap.TryGetValue(p.Id, out var idx) ? idx : int.MaxValue)
@@ -62,12 +65,12 @@ public sealed class MosaicLayoutService(IOptions<MosaicOptions> options) : IMosa
         // không đổi, và trình duyệt tiếp tục dùng bố cục cũ mãi mãi.
         var glyphSignature = ComputeGlyphSignature(mode);
 
-        var layoutId = ComputeLayoutId(mode, glyphSignature, ordered);
+        var layoutId = ComputeLayoutId(mode, glyphSignature, ordered, customTileAssignments);
         if (_cache.TryGetValue(layoutId, out var cached)) return cached;
 
         var (raster, tiles, unitsPerCap, minTiles) = Partition(mode, n);
         var letters = BuildLetters(raster);
-        var assigned = Assign(raster, tiles, ordered);
+        var assigned = Assign(raster, tiles, ordered, posts, customTileAssignments);
 
         var layout = new MosaicLayout(
             LayoutId: layoutId,
@@ -169,9 +172,14 @@ public sealed class MosaicLayoutService(IOptions<MosaicOptions> options) : IMosa
     /// <summary>
     /// Gán ảnh vào ô: ô lớn nhận ảnh được yêu thích nhất, nhưng rải đều qua các
     /// chữ cái để top ảnh không dồn hết vào một chữ.
+    /// Nếu có chỉ định vị trí tùy chỉnh (customTileAssignments), ưu tiên gán chính xác theo cấu hình.
     /// </summary>
     private List<MosaicTile> Assign(
-        GlyphRaster raster, List<PartitionRect> tiles, List<MosaicPostRef> orderedPosts)
+        GlyphRaster raster,
+        List<PartitionRect> tiles,
+        List<MosaicPostRef> orderedPosts,
+        IReadOnlyList<MosaicPostRef> allPosts,
+        IReadOnlyDictionary<int, int>? customTileAssignments = null)
     {
         // Thứ tự ưu tiên nhận ảnh: ô lớn trước, rồi theo vị trí đọc.
         var byPriority = tiles
@@ -184,13 +192,15 @@ public sealed class MosaicLayoutService(IOptions<MosaicOptions> options) : IMosa
         if (_o.LetterStratifiedAssignment)
             byPriority = Stratify(byPriority);
 
-        // rank theo thứ tự ưu tiên → ảnh thứ rank được gán vào ô đó.
-        var sortedById = orderedPosts.OrderBy(p => p.Id).ToList();
+        // slot atlas luôn sắp xếp cố định theo Id bài viết để texture cache được tối ưu vĩnh viễn
+        var sortedById = allPosts.OrderBy(p => p.Id).ToList();
         var idToAtlasSlot = new Dictionary<int, int>(sortedById.Count);
         for (int s = 0; s < sortedById.Count; s++)
         {
             idToAtlasSlot[sortedById[s].Id] = s;
         }
+
+        var validPostIds = new HashSet<int>(allPosts.Select(p => p.Id));
 
         var postIdByReadIndex = new int[tiles.Count];
         var rankByReadIndex = new int[tiles.Count];
@@ -202,9 +212,19 @@ public sealed class MosaicLayoutService(IOptions<MosaicOptions> options) : IMosa
         {
             int readIndex = byPriority[rank].ReadIndex;
             rankByReadIndex[readIndex] = rank;
-            if (rank < orderedPosts.Count)
+
+            int pid = -1;
+            if (customTileAssignments != null && customTileAssignments.TryGetValue(rank, out int assignedPid) && validPostIds.Contains(assignedPid))
             {
-                int pid = orderedPosts[rank].Id;
+                pid = assignedPid;
+            }
+            else if (customTileAssignments == null && rank < orderedPosts.Count)
+            {
+                pid = orderedPosts[rank].Id;
+            }
+
+            if (pid > 0)
+            {
                 postIdByReadIndex[readIndex] = pid;
                 if (idToAtlasSlot.TryGetValue(pid, out int slot))
                 {
@@ -264,7 +284,10 @@ public sealed class MosaicLayoutService(IOptions<MosaicOptions> options) : IMosa
     }
 
     private string ComputeLayoutId(
-        MosaicLayoutMode mode, string glyphSignature, List<MosaicPostRef> ordered)
+        MosaicLayoutMode mode,
+        string glyphSignature,
+        List<MosaicPostRef> ordered,
+        IReadOnlyDictionary<int, int>? customTileAssignments = null)
     {
         var sb = new StringBuilder();
         sb.Append(_o.GlyphVersion).Append('|')
@@ -280,6 +303,15 @@ public sealed class MosaicLayoutService(IOptions<MosaicOptions> options) : IMosa
           .Append(_o.LetterStratifiedAssignment).Append('|')
           .Append(ordered.Count).Append('|');
         foreach (var p in ordered) sb.Append(p.Id).Append(',');
+
+        if (customTileAssignments != null && customTileAssignments.Count > 0)
+        {
+            sb.Append('|');
+            foreach (var kvp in customTileAssignments.OrderBy(x => x.Key))
+            {
+                sb.Append(kvp.Key).Append(':').Append(kvp.Value).Append(';');
+            }
+        }
 
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString()));
         return Convert.ToHexString(hash, 0, 12).ToLowerInvariant();

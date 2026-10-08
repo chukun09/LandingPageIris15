@@ -315,6 +315,31 @@ public class MosaicLayoutTests
         Assert.Equal(vipPostId, rankZeroTile.PostId);
     }
 
+    [Fact]
+    public void Custom_tile_assignments_assign_posts_to_specified_tile_ranks()
+    {
+        var service = NewService();
+        var posts = Posts(3); // chỉ có 3 ảnh
+        var assignments = new Dictionary<int, int>
+        {
+            [14] = posts[0].Id, // gán ảnh 1 vào ô rank 14
+            [0] = posts[1].Id,  // gán ảnh 2 vào ô rank 0
+            [35] = posts[2].Id  // gán ảnh 3 vào ô rank 35
+        };
+
+        var layout = service.Build(posts, customTileAssignments: assignments);
+
+        var tile14 = layout.Tiles.Single(t => t.Rank == 14);
+        var tile0 = layout.Tiles.Single(t => t.Rank == 0);
+        var tile35 = layout.Tiles.Single(t => t.Rank == 35);
+        var tile1 = layout.Tiles.Single(t => t.Rank == 1);
+
+        Assert.Equal(posts[0].Id, tile14.PostId);
+        Assert.Equal(posts[1].Id, tile0.PostId);
+        Assert.Equal(posts[2].Id, tile35.PostId);
+        Assert.Equal(-1, tile1.PostId); // ô không gán thì để trống
+    }
+
     private static string Fingerprint(MosaicLayout layout) =>
         string.Join(';', layout.Tiles.Select(t =>
             $"{t.Index}:{t.Unit.X},{t.Unit.Y},{t.Unit.W},{t.Unit.H},{t.LetterId},{t.PostId},{t.Rank}"));

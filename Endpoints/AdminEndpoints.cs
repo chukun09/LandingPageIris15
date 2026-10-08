@@ -271,13 +271,47 @@ public static class AdminEndpoints
             LandingPageEvent.Services.Mosaic.IMosaicPublishService publishService,
             CancellationToken ct) =>
         {
-            if (request.OrderedPostIds == null || request.OrderedPostIds.Count == 0)
+            var cleanOrderedIds = request.OrderedPostIds?
+                .Where(id => id.HasValue && id.Value > 0)
+                .Select(id => id!.Value)
+                .Distinct()
+                .ToList() ?? [];
+
+            var tileAssignments = request.TileAssignments != null
+                ? new Dictionary<int, int>(request.TileAssignments)
+                : new Dictionary<int, int>();
+
+            // Nếu request có mảng thứ tự chứa vị trí cụ thể (kể cả có null/holes) mà chưa có tileAssignments, suy diễn vị trí từ chỉ số mảng
+            if (request.OrderedPostIds != null && tileAssignments.Count == 0)
             {
-                return TypedResults.BadRequest("Danh sách thứ tự bài viết không được để trống.");
+                for (int i = 0; i < request.OrderedPostIds.Count; i++)
+                {
+                    var id = request.OrderedPostIds[i];
+                    if (id.HasValue && id.Value > 0)
+                    {
+                        tileAssignments[i] = id.Value;
+                    }
+                }
             }
 
-            var state = await publishService.PublishAsync(request.OrderedPostIds, ct);
-            return TypedResults.Ok(state);
+            if (cleanOrderedIds.Count == 0 && tileAssignments.Count == 0)
+            {
+                return TypedResults.BadRequest("Danh sách thứ tự hoặc vị trí bài viết không được để trống.");
+            }
+
+            try
+            {
+                var state = await publishService.PublishAsync(
+                    cleanOrderedIds,
+                    tileAssignments.Count > 0 ? tileAssignments : null,
+                    ct);
+
+                return TypedResults.Ok(state);
+            }
+            catch (System.Exception ex)
+            {
+                return TypedResults.BadRequest($"Lỗi khi xuất bản bố cục Mosaic: {ex.Message}");
+            }
         })
         .WithName("PublishMosaic")
         .WithSummary("Lưu và xuất bản Bố cục Mosaic")
@@ -357,4 +391,6 @@ public sealed record ApproveAllResponse(int Count, string Message);
 /// <summary>
 /// Yêu cầu xuất bản bố cục Mosaic.
 /// </summary>
-public sealed record PublishMosaicRequest(List<int> OrderedPostIds);
+public sealed record PublishMosaicRequest(
+    List<int?>? OrderedPostIds = null,
+    Dictionary<int, int>? TileAssignments = null);

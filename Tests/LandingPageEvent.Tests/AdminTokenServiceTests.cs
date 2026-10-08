@@ -83,4 +83,33 @@ public class AdminTokenServiceTests
         var expiredToken = $"{now - 100}:{now - 10}:dummy_signature";
         Assert.False(service.ValidateToken(expiredToken));
     }
+
+    [Fact]
+    public void TestPublishRequestDeserialization()
+    {
+        var options = new System.Text.Json.JsonSerializerOptions
+        {
+            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
+        };
+        var json1 = """{"orderedPostIds":[1,2,3]}""";
+        var req1 = System.Text.Json.JsonSerializer.Deserialize<LandingPageEvent.Endpoints.PublishMosaicRequest>(json1, options);
+        Assert.NotNull(req1);
+        Assert.NotNull(req1.OrderedPostIds);
+        Assert.Equal(3, req1.OrderedPostIds.Count);
+
+        // Đảm bảo request chứa null (từ mảng sparse) không bị ném JsonException mà được parse an toàn
+        var jsonWithNull = """{"orderedPostIds":[1,2,null,null,3],"tileAssignments":{"18":3}}""";
+        var reqWithNull = System.Text.Json.JsonSerializer.Deserialize<LandingPageEvent.Endpoints.PublishMosaicRequest>(jsonWithNull, options);
+        Assert.NotNull(reqWithNull);
+        Assert.NotNull(reqWithNull.OrderedPostIds);
+        Assert.Equal(5, reqWithNull.OrderedPostIds.Count);
+        Assert.NotNull(reqWithNull.TileAssignments);
+        Assert.Equal(3, reqWithNull.TileAssignments[18]);
+
+        var clean = reqWithNull.OrderedPostIds
+            .Where(x => x.HasValue && x.Value > 0)
+            .Select(x => x!.Value)
+            .ToList();
+        Assert.Equal(new[] { 1, 2, 3 }, clean);
+    }
 }

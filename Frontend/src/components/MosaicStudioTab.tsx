@@ -36,6 +36,7 @@ interface MosaicPublishState {
   photoCount: number;
   currentOrder: number[];
   assignments: PostAssignment[];
+  tileAssignments?: Record<number, number>;
 }
 
 export interface MosaicApprovedPost {
@@ -67,6 +68,7 @@ export const MosaicStudioTab: React.FC<MosaicStudioTabProps> = ({
   const [state, setState] = useState<MosaicPublishState | null>(null);
   const [layout, setLayout] = useState<MosaicLayoutResponse | null>(null);
   const [order, setOrder] = useState<number[]>([]);
+  const [tileAssignments, setTileAssignments] = useState<Record<number, number>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishStep, setPublishStep] = useState<number>(0);
@@ -123,28 +125,51 @@ export const MosaicStudioTab: React.FC<MosaicStudioTabProps> = ({
         return;
       }
 
+      let layoutData: MosaicLayoutResponse | null = null;
       if (layoutRes.ok) {
-        const layoutData: MosaicLayoutResponse = await layoutRes.json();
+        layoutData = await layoutRes.json();
         setLayout(layoutData);
       }
+
+      let currentOrder: number[] = [];
+      const initialMap: Record<number, number> = {};
 
       if (stateRes.ok) {
         const stateData: MosaicPublishState = await stateRes.json();
         setState(stateData);
         if (stateData.currentOrder && stateData.currentOrder.length > 0) {
-          setOrder(stateData.currentOrder);
-        } else {
-          const fallbackOrder = [...approvedPosts]
-            .sort((a, b) => b.voteCount - a.voteCount || a.id - b.id)
-            .map((p) => p.id);
-          setOrder(fallbackOrder);
+          currentOrder = stateData.currentOrder.filter((id) => typeof id === 'number' && id > 0);
         }
-      } else {
-        const fallbackOrder = [...approvedPosts]
+        if (stateData.tileAssignments) {
+          Object.entries(stateData.tileAssignments).forEach(([rStr, pid]) => {
+            const r = Number(rStr);
+            const p = Number(pid);
+            if (!isNaN(r) && !isNaN(p) && p > 0) {
+              initialMap[r] = p;
+            }
+          });
+        } else if (stateData.assignments && stateData.assignments.length > 0) {
+          stateData.assignments.forEach((a) => {
+            if (a.postId > 0) initialMap[a.rank] = a.postId;
+          });
+        }
+      }
+
+      // Nếu chưa có gán nào thì lấy từ layout.tiles
+      if (Object.keys(initialMap).length === 0 && layoutData?.tiles) {
+        layoutData.tiles.forEach((t) => {
+          if (t.postId > 0) initialMap[t.rank] = t.postId;
+        });
+      }
+
+      if (currentOrder.length === 0) {
+        currentOrder = [...approvedPosts]
           .sort((a, b) => b.voteCount - a.voteCount || a.id - b.id)
           .map((p) => p.id);
-        setOrder(fallbackOrder);
       }
+
+      setOrder(currentOrder);
+      setTileAssignments(initialMap);
     } catch {
       const fallbackOrder = [...approvedPosts]
         .sort((a, b) => b.voteCount - a.voteCount || a.id - b.id)
@@ -179,40 +204,69 @@ export const MosaicStudioTab: React.FC<MosaicStudioTabProps> = ({
     return map;
   }, [layout]);
 
+  // Lấy postId đã được gán cho một ô theo rank
+  const getPostIdForRank = useCallback(
+    (rank: number): number | undefined => {
+      if (tileAssignments[rank] !== undefined && tileAssignments[rank] > 0) {
+        return tileAssignments[rank];
+      }
+      return undefined;
+    },
+    [tileAssignments]
+  );
+
   // Map postId sang thông tin vị trí hiện tại trên bức khảm
   const postPlacementMap = useMemo(() => {
     const map = new Map<number, { rank: number; tile?: MosaicTile; letterChar: string; isGold: boolean }>();
-    order.forEach((postId, rank) => {
-      const tile = rankToTileMap.get(rank);
-      const letterChar = tile
-        ? tile.letterId === 'GI1' || tile.letterId === 'GI2'
-          ? 'I'
-          : tile.letterId === 'GR'
-          ? 'R'
-          : tile.letterId === 'GS'
-          ? 'S'
-          : tile.letterId === 'N1'
-          ? '1'
-          : tile.letterId === 'N5'
-          ? '5'
-          : 'I'
-        : 'I';
-      const isGold = !tile || tile.letterId.startsWith('G');
-      map.set(postId, { rank, tile, letterChar, isGold });
-    });
-    return map;
-  }, [order, rankToTileMap]);
 
-  // Hoán đổi vị trí giữa 2 rank
+    Object.entries(tileAssignments).forEach(([rStr, pid]) => {
+      const rank = Number(rStr);
+      if (pid > 0) {
+        const tile = rankToTileMap.get(rank);
+        const letterChar = tile
+          ? tile.letterId === 'GI1' || tile.letterId === 'GI2'
+            ? 'I'
+            : tile.letterId === 'GR'
+            ? 'R'
+            : tile.letterId === 'GS'
+            ? 'S'
+            : tile.letterId === 'N1'
+            ? '1'
+            : tile.letterId === 'N5'
+            ? '5'
+            : 'I'
+          : 'I';
+        const isGold = !tile || tile.letterId.startsWith('G');
+        map.set(pid, { rank, tile, letterChar, isGold });
+      }
+    });
+
+    return map;
+  }, [tileAssignments, rankToTileMap]);
+
+  // Hoán đổi vị trí giữa 2 rank trên mô hình
   const swapRanks = useCallback((rankA: number, rankB: number) => {
     if (rankA === rankB) return;
-    setOrder((prev) => {
-      const next = [...prev];
-      const temp = next[rankA];
-      next[rankA] = next[rankB];
-      next[rankB] = temp;
+    setTileAssignments((prev) => {
+      const next = { ...prev };
+      const postA = next[rankA];
+      const postB = next[rankB];
+
+      if (postA !== undefined) {
+        next[rankB] = postA;
+      } else {
+        delete next[rankB];
+      }
+
+      if (postB !== undefined) {
+        next[rankA] = postB;
+      } else {
+        delete next[rankA];
+      }
+
       return next;
     });
+
     setSelectedRank(null);
     setSelectedDrawerPostId(null);
     setFeedbackMsg({
@@ -221,30 +275,56 @@ export const MosaicStudioTab: React.FC<MosaicStudioTabProps> = ({
     });
   }, []);
 
-  // Gán bài viết cụ thể vào một rank mục tiêu
+  // Gán bài viết cụ thể vào một rank mục tiêu trên mô hình IRIS 15
   const placePostIntoRank = useCallback(
     (postId: number, targetRank: number) => {
-      setOrder((prev) => {
-        const currentRank = prev.indexOf(postId);
-        const next = [...prev];
-        if (currentRank !== -1) {
-          const temp = next[targetRank];
-          next[targetRank] = next[currentRank];
-          next[currentRank] = temp;
-        } else {
-          next[targetRank] = postId;
+      setTileAssignments((prev) => {
+        const next = { ...prev };
+        let previousRank: number | null = null;
+        for (const [rStr, pid] of Object.entries(next)) {
+          if (pid === postId) {
+            previousRank = Number(rStr);
+            break;
+          }
         }
+
+        const existingAtTarget = next[targetRank];
+
+        if (previousRank !== null && previousRank !== targetRank) {
+          if (existingAtTarget) {
+            next[previousRank] = existingAtTarget;
+          } else {
+            delete next[previousRank];
+          }
+        }
+
+        next[targetRank] = postId;
         return next;
       });
+
       setSelectedRank(null);
       setSelectedDrawerPostId(null);
       setFeedbackMsg({
         type: 'success',
-        text: `Đã gán bài viết #${postId} vào Ô #${targetRank + 1} thành công!`,
+        text: `Đã đặt ảnh #${postId} vào Ô #${targetRank + 1} thành công!`,
       });
     },
     []
   );
+
+  // Gỡ ảnh khỏi một ô (ô trở thành trống)
+  const unassignRank = useCallback((rank: number) => {
+    setTileAssignments((prev) => {
+      const next = { ...prev };
+      delete next[rank];
+      return next;
+    });
+    setSelectedRank(null);
+    setFeedbackMsg({
+      type: 'success',
+      text: `Đã gỡ ảnh khỏi Ô #${rank + 1}.`,
+    });
+  }, []);
 
   // Xử lý click vào một ô trên mô hình IRIS 15
   const handleTileClick = (tileRank: number) => {
@@ -312,11 +392,14 @@ export const MosaicStudioTab: React.FC<MosaicStudioTabProps> = ({
 
   // Presets sắp xếp
   const sortByVotes = () => {
-    const sorted = [...order].sort((a, b) => {
-      const postA = postMap.get(a);
-      const postB = postMap.get(b);
-      return (postB?.voteCount || 0) - (postA?.voteCount || 0);
+    const sorted = [...approvedPosts]
+      .sort((a, b) => b.voteCount - a.voteCount || a.id - b.id)
+      .map((p) => p.id);
+    const nextMap: Record<number, number> = {};
+    sorted.forEach((pid, rank) => {
+      nextMap[rank] = pid;
     });
+    setTileAssignments(nextMap);
     setOrder(sorted);
     setSelectedRank(null);
     setSelectedDrawerPostId(null);
@@ -325,11 +408,10 @@ export const MosaicStudioTab: React.FC<MosaicStudioTabProps> = ({
 
   const sortByDepartment = () => {
     const byDept = new Map<string, number[]>();
-    order.forEach((id) => {
-      const post = postMap.get(id);
-      const dept = post?.department || 'Khác';
+    approvedPosts.forEach((p) => {
+      const dept = p.department || 'Khác';
       if (!byDept.has(dept)) byDept.set(dept, []);
-      byDept.get(dept)!.push(id);
+      byDept.get(dept)!.push(p.id);
     });
 
     const result: number[] = [];
@@ -344,6 +426,11 @@ export const MosaicStudioTab: React.FC<MosaicStudioTabProps> = ({
         }
       }
     }
+    const nextMap: Record<number, number> = {};
+    result.forEach((pid, rank) => {
+      nextMap[rank] = pid;
+    });
+    setTileAssignments(nextMap);
     setOrder(result);
     setSelectedRank(null);
     setSelectedDrawerPostId(null);
@@ -368,7 +455,15 @@ export const MosaicStudioTab: React.FC<MosaicStudioTabProps> = ({
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const updatedState: MosaicPublishState = await res.json();
       setState(updatedState);
-      setOrder(updatedState.currentOrder || []);
+      if (updatedState.currentOrder) setOrder(updatedState.currentOrder);
+
+      const newMap: Record<number, number> = {};
+      if (updatedState.assignments) {
+        updatedState.assignments.forEach((a) => {
+          if (a.postId > 0) newMap[a.rank] = a.postId;
+        });
+      }
+      setTileAssignments(newMap);
       setSelectedRank(null);
       setSelectedDrawerPostId(null);
       setFeedbackMsg({ type: 'success', text: 'Đã khôi phục bố cục về chế độ tự động.' });
@@ -384,7 +479,7 @@ export const MosaicStudioTab: React.FC<MosaicStudioTabProps> = ({
 
   // Xuất bản bố cục lên CDN R2
   const handlePublish = async () => {
-    if (order.length === 0) return;
+    if (approvedPosts.length === 0) return;
     setIsPublishing(true);
     setPublishStep(1);
     setFeedbackMsg(null);
@@ -394,10 +489,43 @@ export const MosaicStudioTab: React.FC<MosaicStudioTabProps> = ({
     }, 1800);
 
     try {
+      // 1. Chuẩn hóa sạch tileAssignments
+      const cleanAssignments: Record<number, number> = {};
+      const assignedIds = new Set<number>();
+      Object.entries(tileAssignments).forEach(([rStr, pid]) => {
+        const rank = Number(rStr);
+        const postId = Number(pid);
+        if (!isNaN(rank) && !isNaN(postId) && postId > 0) {
+          cleanAssignments[rank] = postId;
+          assignedIds.add(postId);
+        }
+      });
+
+      // 2. Chuẩn hóa orderedPostIds: bài đã gán xếp trước theo rank, các bài còn lại nối tiếp
+      const orderedPostIds: number[] = [];
+      Object.keys(cleanAssignments)
+        .map(Number)
+        .sort((a, b) => a - b)
+        .forEach((rank) => {
+          const pid = cleanAssignments[rank];
+          if (!orderedPostIds.includes(pid)) {
+            orderedPostIds.push(pid);
+          }
+        });
+
+      approvedPosts.forEach((p) => {
+        if (!orderedPostIds.includes(p.id)) {
+          orderedPostIds.push(p.id);
+        }
+      });
+
       const res = await fetch('/api/admin/mosaic/publish', {
         method: 'POST',
         headers: getAdminHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ orderedPostIds: order }),
+        body: JSON.stringify({
+          orderedPostIds,
+          tileAssignments: cleanAssignments,
+        }),
       });
 
       if (res.status === 401) {
@@ -406,13 +534,29 @@ export const MosaicStudioTab: React.FC<MosaicStudioTabProps> = ({
       }
 
       if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(errorText || `HTTP ${res.status}`);
+        let errorMsg = `HTTP ${res.status}`;
+        try {
+          const errData = await res.json();
+          errorMsg = errData.detail || errData.title || errData.error || (typeof errData === 'string' ? errData : JSON.stringify(errData));
+        } catch {
+          const errText = await res.text();
+          if (errText) errorMsg = errText;
+        }
+        throw new Error(errorMsg);
       }
 
       const updatedState: MosaicPublishState = await res.json();
       setState(updatedState);
-      setOrder(updatedState.currentOrder || order);
+      if (updatedState.currentOrder) setOrder(updatedState.currentOrder);
+      if (updatedState.tileAssignments) {
+        setTileAssignments(updatedState.tileAssignments);
+      } else if (updatedState.assignments) {
+        const newMap: Record<number, number> = {};
+        updatedState.assignments.forEach((a) => {
+          if (a.postId > 0) newMap[a.rank] = a.postId;
+        });
+        setTileAssignments(newMap);
+      }
       setSelectedRank(null);
       setSelectedDrawerPostId(null);
       setFeedbackMsg({
@@ -463,7 +607,8 @@ export const MosaicStudioTab: React.FC<MosaicStudioTabProps> = ({
   // Thông tin bài viết và ô đang được chọn hoặc hover
   const activeTileRank = hoveredRank !== null ? hoveredRank : selectedRank;
   const activeTileInfo = activeTileRank !== null ? rankToTileMap.get(activeTileRank) : null;
-  const activePost = activeTileRank !== null ? postMap.get(order[activeTileRank]) : null;
+  const activePostId = activeTileRank !== null ? getPostIdForRank(activeTileRank) : undefined;
+  const activePost = activePostId !== undefined ? postMap.get(activePostId) : null;
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -578,7 +723,8 @@ export const MosaicStudioTab: React.FC<MosaicStudioTabProps> = ({
             {selectedRank !== null ? (
               <span>
                 Đang chọn: <strong>Ô #{selectedRank + 1}</strong> (
-                {rankToTileMap.get(selectedRank)?.letterId.startsWith('G') ? 'Chữ IRIS' : 'Số 15'} - Bài #{order[selectedRank]})
+                {rankToTileMap.get(selectedRank)?.letterId.startsWith('G') ? 'Chữ IRIS' : 'Số 15'}
+                {getPostIdForRank(selectedRank) ? ` - Bài #${getPostIdForRank(selectedRank)}` : ' - Ô trống'})
                 {' '}&rarr; <em>Nhấp vào ô khác trên mô hình</em> để hoán đổi, HOẶC <em>nhấp ảnh trong kho bên dưới</em> để đặt vào ô này!
               </span>
             ) : (
@@ -697,8 +843,8 @@ export const MosaicStudioTab: React.FC<MosaicStudioTabProps> = ({
 
             {/* Render từng ô khảm */}
             {layout?.tiles.map((t) => {
-              const assignedPostId = order[t.rank];
-              const post = postMap.get(assignedPostId);
+              const assignedPostId = getPostIdForRank(t.rank);
+              const post = assignedPostId ? postMap.get(assignedPostId) : undefined;
               const isVip = t.rank === 0;
               const isSelected = selectedRank === t.rank;
               const isDragOver = dragOverRank === t.rank;
@@ -822,6 +968,14 @@ export const MosaicStudioTab: React.FC<MosaicStudioTabProps> = ({
                   "{activePost.message}"
                 </p>
               </div>
+              <button
+                type="button"
+                onClick={() => unassignRank(activeTileRank!)}
+                className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-rose-500/15 text-rose-300 hover:bg-rose-500/25 border border-rose-500/30 transition-colors shrink-0 ml-1"
+                title="Gỡ ảnh khỏi ô này và đưa về khay"
+              >
+                Gỡ ảnh (✕)
+              </button>
             </div>
           ) : (
             <div className="text-brand-textMuted flex items-center gap-2">
@@ -951,12 +1105,18 @@ export const MosaicStudioTab: React.FC<MosaicStudioTabProps> = ({
                     className={`absolute top-1 left-1 px-1.5 py-0.5 rounded text-[9px] font-black shadow-sm ${
                       isHero
                         ? 'bg-amber-400 text-slate-950 font-black'
-                        : placement?.isGold
-                        ? 'bg-amber-500/85 text-slate-950'
-                        : 'bg-sky-500/85 text-white'
+                        : placement
+                        ? placement.isGold
+                          ? 'bg-amber-500/85 text-slate-950'
+                          : 'bg-sky-500/85 text-white'
+                        : 'bg-slate-700/90 text-slate-300'
                     }`}
                   >
-                    {isHero ? '★ VIP' : `#${(placement?.rank ?? 0) + 1}`}
+                    {isHero
+                      ? '★ VIP'
+                      : placement
+                      ? `#${placement.rank + 1} (${placement.letterChar})`
+                      : 'Trong khay'}
                   </div>
 
                   {/* Nút phóng to preview */}
@@ -991,15 +1151,21 @@ export const MosaicStudioTab: React.FC<MosaicStudioTabProps> = ({
 
                   {/* Placement tag */}
                   <div className="pt-1 border-t border-brand-border/40 flex items-center justify-between text-[10px]">
-                    <span
-                      className={`font-mono font-bold px-1.5 py-0.2 rounded border ${
-                        placement?.isGold
-                          ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                          : 'bg-sky-500/10 text-sky-400 border-sky-500/20'
-                      }`}
-                    >
-                      Chữ {placement?.letterChar || 'I'} • Ô #{((placement?.rank ?? 0) + 1)}
-                    </span>
+                    {placement ? (
+                      <span
+                        className={`font-mono font-bold px-1.5 py-0.2 rounded border ${
+                          placement.isGold
+                            ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                            : 'bg-sky-500/10 text-sky-400 border-sky-500/20'
+                        }`}
+                      >
+                        Chữ {placement.letterChar} • Ô #{placement.rank + 1}
+                      </span>
+                    ) : (
+                      <span className="font-mono text-brand-textMuted px-1.5 py-0.2 rounded bg-brand-surface border border-brand-border/60">
+                        Chưa gán (Trong khay)
+                      </span>
+                    )}
 
                     {isSelected && (
                       <span className="text-amber-400 font-bold text-[9px]">Đang chọn</span>

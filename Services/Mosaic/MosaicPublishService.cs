@@ -15,7 +15,8 @@ public sealed record MosaicPublishedConfig(
     DateTimeOffset? PublishedAt,
     string? LayoutId,
     List<int> OrderedPostIds,
-    int PhotoCount);
+    int PhotoCount,
+    Dictionary<int, int>? TileAssignments = null);
 
 public sealed record MosaicPostAssignmentDto(
     int PostId,
@@ -32,12 +33,13 @@ public sealed record MosaicPublishStateDto(
     string? LayoutId,
     int PhotoCount,
     List<int> CurrentOrder,
-    List<MosaicPostAssignmentDto> Assignments);
+    List<MosaicPostAssignmentDto> Assignments,
+    Dictionary<int, int>? TileAssignments = null);
 
 public interface IMosaicPublishService
 {
     Task<MosaicPublishStateDto> GetStateAsync(CancellationToken ct);
-    Task<MosaicPublishStateDto> PublishAsync(List<int> orderedPostIds, CancellationToken ct);
+    Task<MosaicPublishStateDto> PublishAsync(List<int> orderedPostIds, Dictionary<int, int>? tileAssignments, CancellationToken ct);
     Task<MosaicPublishStateDto> ResetToDefaultAsync(CancellationToken ct);
     Task<MosaicLayout?> GetPublishedLayoutAsync(CancellationToken ct);
     Task<MosaicAtlas?> GetPublishedAtlasAsync(int tileSize, CancellationToken ct);
@@ -137,7 +139,8 @@ public sealed class MosaicPublishService : IMosaicPublishService
             }
         }
 
-        var layout = _layoutService.Build(posts, customOrder: currentOrder);
+        var tileAssignments = _cachedConfig?.TileAssignments;
+        var layout = _layoutService.Build(posts, customOrder: currentOrder, customTileAssignments: tileAssignments);
         var assignments = BuildAssignments(layout);
 
         return new MosaicPublishStateDto(
@@ -146,10 +149,14 @@ public sealed class MosaicPublishService : IMosaicPublishService
             LayoutId: _cachedConfig?.IsPublished == true ? _cachedConfig.LayoutId : layout.LayoutId,
             PhotoCount: posts.Count,
             CurrentOrder: currentOrder,
-            Assignments: assignments);
+            Assignments: assignments,
+            TileAssignments: tileAssignments);
     }
 
-    public async Task<MosaicPublishStateDto> PublishAsync(List<int> orderedPostIds, CancellationToken ct)
+    public async Task<MosaicPublishStateDto> PublishAsync(
+        List<int> orderedPostIds,
+        Dictionary<int, int>? tileAssignments,
+        CancellationToken ct)
     {
         await _lock.WaitAsync(ct);
         try
@@ -169,26 +176,21 @@ public sealed class MosaicPublishService : IMosaicPublishService
                 }
             }
 
-            // 1. Dựng layout theo thứ tự này
-            var layout = _layoutService.Build(posts, customOrder: finalOrder);
+            // 1. Dựng layout theo thứ tự và vị trí ô tùy chỉnh
+            var layout = _layoutService.Build(
+                posts,
+                customOrder: finalOrder,
+                customTileAssignments: tileAssignments);
 
-            // 2. Render Atlas chất lượng cao (ưu tiên Preview Stream 1600px cho độ nét cao)
-            var orderedPostRefs = new List<MosaicPostRef>(finalOrder.Count);
-            var postMap = posts.ToDictionary(p => p.Id);
-            foreach (var id in finalOrder)
-            {
-                if (postMap.TryGetValue(id, out var r))
-                {
-                    orderedPostRefs.Add(r);
-                }
-            }
+            // 2. Render Atlas chất lượng cao (luôn sắp xếp theo Id để khớp tuyệt đối với idToAtlasSlot)
+            var orderedForAtlas = posts.OrderBy(p => p.Id).ToList();
 
             _cachedAtlases.Clear();
 
             foreach (var tileSize in SupportedTileSizes)
             {
                 ct.ThrowIfCancellationRequested();
-                var atlas = await RenderHighQualityAtlasAsync(tileSize, orderedPostRefs, postService, layout.LayoutId, ct);
+                var atlas = await RenderHighQualityAtlasAsync(tileSize, orderedForAtlas, postService, layout.LayoutId, ct);
                 _cachedAtlases[tileSize] = atlas;
 
                 // Lưu file Atlas tĩnh lên Storage
@@ -209,7 +211,8 @@ public sealed class MosaicPublishService : IMosaicPublishService
                 PublishedAt: DateTimeOffset.UtcNow,
                 LayoutId: layout.LayoutId,
                 OrderedPostIds: finalOrder,
-                PhotoCount: posts.Count);
+                PhotoCount: posts.Count,
+                TileAssignments: tileAssignments);
 
             if (_storageService != null)
             {
@@ -231,7 +234,8 @@ public sealed class MosaicPublishService : IMosaicPublishService
                 LayoutId: layout.LayoutId,
                 PhotoCount: posts.Count,
                 CurrentOrder: finalOrder,
-                Assignments: assignments);
+                Assignments: assignments,
+                TileAssignments: tileAssignments);
         }
         finally
         {
@@ -278,7 +282,10 @@ public sealed class MosaicPublishService : IMosaicPublishService
         var postService = scope.ServiceProvider.GetRequiredService<IPostService>();
         var posts = await postService.GetMosaicPostRefsAsync(ct);
 
-        _cachedLayout = _layoutService.Build(posts, customOrder: _cachedConfig.OrderedPostIds);
+        _cachedLayout = _layoutService.Build(
+            posts,
+            customOrder: _cachedConfig.OrderedPostIds,
+            customTileAssignments: _cachedConfig.TileAssignments);
         return _cachedLayout;
     }
 
