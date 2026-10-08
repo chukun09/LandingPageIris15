@@ -14,6 +14,8 @@ import {
   Search,
   FileText,
   ExternalLink,
+  CheckCheck,
+  Maximize2,
 } from 'lucide-react';
 import { ModalShell } from './ModalShell';
 import { PodcastStudioTab } from './PodcastStudioTab';
@@ -23,6 +25,7 @@ interface PendingPost {
   message: string;
   department: string;
   thumbnailImagePath?: string;
+  originalImagePath?: string;
   thumbnailUrl?: string;
   previewUrl?: string;
   voteCount: number;
@@ -46,6 +49,7 @@ interface AdminPanelProps {
   approvedPosts: PendingPost[];
   podcasts: Podcast[];
   onApprove: (id: number, approve: boolean) => Promise<void>;
+  onApproveAll?: () => Promise<void>;
   onTogglePin?: (id: number, isPinned?: boolean) => Promise<void>;
   onGeneratePodcast: (id: number, title: string, apiKey: string, region: string) => Promise<void>;
   onUploadPodcast: (formData: FormData) => Promise<void>;
@@ -64,6 +68,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   approvedPosts,
   podcasts,
   onApprove,
+  onApproveAll,
   onTogglePin,
   onGeneratePodcast,
   onUploadPodcast,
@@ -80,6 +85,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [pinningPostId, setPinningPostId] = useState<number | null>(null);
   const [approvedSearch, setApprovedSearch] = useState('');
   const [realDurations, setRealDurations] = useState<Record<number, number>>({});
+  const [previewPost, setPreviewPost] = useState<PendingPost | null>(null);
+  const [isApprovingAll, setIsApprovingAll] = useState(false);
 
   const loadedAudioIds = useRef<Set<number>>(new Set());
 
@@ -164,10 +171,36 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
+  const handleApproveAllAction = async () => {
+    if (!onApproveAll || pendingPosts.length === 0) return;
+    if (!window.confirm(`Bạn có chắc chắn muốn duyệt toàn bộ ${pendingPosts.length} bài viết đang chờ không?`)) {
+      return;
+    }
+    setIsApprovingAll(true);
+    try {
+      await onApproveAll();
+    } catch {
+      alert('Thao tác duyệt toàn bộ thất bại.');
+    } finally {
+      setIsApprovingAll(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && previewPost) {
+        setPreviewPost(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [previewPost]);
+
   const pinnedCount = approvedPosts.filter((p) => p.isPinned).length;
 
   return (
-    <ModalShell isOpen={isOpen} onClose={onClose} maxWidth="max-w-6xl xl:max-w-7xl">
+    <>
+      <ModalShell isOpen={isOpen} onClose={onClose} maxWidth="max-w-6xl xl:max-w-7xl">
       <div className="flex flex-col h-[88vh]">
         {/* Header */}
         <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-brand-border flex flex-wrap items-center justify-between gap-y-2 shrink-0 bg-brand-surface/40">
@@ -330,6 +363,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         </div>
                       </div>
                     )}
+
+                    {postsSubTab === 'pending' && pendingPosts.length > 0 && onApproveAll && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleApproveAllAction}
+                          disabled={isApprovingAll}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold shadow-sm transition-all whitespace-nowrap disabled:opacity-50 active:scale-95"
+                          title="Duyệt tất cả bài viết đang chờ"
+                        >
+                          <CheckCheck className="w-4 h-4 shrink-0" />
+                          <span>{isApprovingAll ? 'Đang duyệt...' : `Duyệt toàn bộ (${pendingPosts.length})`}</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {/* SubTab: Pending */}
@@ -354,18 +402,28 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             {pendingPosts.map((post) => (
                               <tr key={post.id} className="hover:bg-brand-surface/50 transition-colors">
                                 <td className="p-3.5 w-16 text-center align-top">
-                                  <img
-                                    src={post.thumbnailUrl || post.thumbnailImagePath}
-                                    alt="thumb"
-                                    width={48}
-                                    height={48}
-                                    loading="lazy"
-                                    decoding="async"
-                                    className="w-12 h-12 object-cover rounded-lg border border-brand-border mx-auto"
-                                    onError={(e) => {
-                                      e.currentTarget.style.display = 'none';
-                                    }}
-                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => setPreviewPost(post)}
+                                    className="relative group block mx-auto rounded-lg overflow-hidden border border-brand-border hover:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/50 transition-all cursor-zoom-in"
+                                    title="Nhấn để phóng to ảnh xem chi tiết"
+                                  >
+                                    <img
+                                      src={post.thumbnailUrl || post.thumbnailImagePath}
+                                      alt="thumb"
+                                      width={48}
+                                      height={48}
+                                      loading="lazy"
+                                      decoding="async"
+                                      className="w-12 h-12 object-cover group-hover:scale-110 transition-transform duration-200"
+                                      onError={(e) => {
+                                        e.currentTarget.style.display = 'none';
+                                      }}
+                                    />
+                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                      <Maximize2 className="w-3.5 h-3.5 text-white drop-shadow" />
+                                    </div>
+                                  </button>
                                 </td>
                                 <td className="p-3.5 leading-relaxed font-normal text-brand-textPrimary align-top">
                                   {post.message}
@@ -436,18 +494,28 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                               .map((post) => (
                                 <tr key={post.id} className="hover:bg-brand-surface/50 transition-colors">
                                   <td className="p-3.5 w-16 text-center align-top">
-                                    <img
-                                      src={post.thumbnailUrl || post.thumbnailImagePath}
-                                      alt="thumb"
-                                      width={48}
-                                      height={48}
-                                      loading="lazy"
-                                      decoding="async"
-                                      className="w-12 h-12 object-cover rounded-lg border border-brand-border mx-auto"
-                                      onError={(e) => {
-                                        e.currentTarget.style.display = 'none';
-                                      }}
-                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => setPreviewPost(post)}
+                                      className="relative group block mx-auto rounded-lg overflow-hidden border border-brand-border hover:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/50 transition-all cursor-zoom-in"
+                                      title="Nhấn để phóng to ảnh xem chi tiết"
+                                    >
+                                      <img
+                                        src={post.thumbnailUrl || post.thumbnailImagePath}
+                                        alt="thumb"
+                                        width={48}
+                                        height={48}
+                                        loading="lazy"
+                                        decoding="async"
+                                        className="w-12 h-12 object-cover group-hover:scale-110 transition-transform duration-200"
+                                        onError={(e) => {
+                                          e.currentTarget.style.display = 'none';
+                                        }}
+                                      />
+                                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                        <Maximize2 className="w-3.5 h-3.5 text-white drop-shadow" />
+                                      </div>
+                                    </button>
                                   </td>
                                   <td className="p-3.5 leading-relaxed font-normal text-brand-textPrimary align-top">
                                     {post.message}
@@ -768,6 +836,130 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </AnimatePresence>
         </div>
       </div>
-    </ModalShell>
+      </ModalShell>
+
+      {/* Lightbox phóng to ảnh kỷ niệm cho BTC */}
+      <AnimatePresence>
+        {previewPost && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6"
+            onClick={() => setPreviewPost(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="relative max-w-4xl w-full max-h-[92vh] flex flex-col bg-slate-900 border border-amber-500/30 rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-white/10 bg-slate-950/70 shrink-0">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                  <span className="font-mono text-[11px] font-bold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/20 shrink-0">
+                    #{previewPost.id}
+                  </span>
+                  <div className="min-w-0">
+                    <h4 className="text-xs sm:text-sm font-bold text-white truncate">
+                      {previewPost.department || 'Đại gia đình IRIS'}
+                    </h4>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      {new Date(previewPost.createdAt).toLocaleString('vi-VN')}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPreviewPost(null)}
+                  className="p-1.5 sm:p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
+                  title="Đóng (Esc)"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Khu vực ảnh lớn */}
+              <div className="flex-1 min-h-0 bg-black/60 flex items-center justify-center p-2 sm:p-4 overflow-hidden relative">
+                <img
+                  src={
+                    previewPost.originalImagePath ||
+                    previewPost.previewUrl ||
+                    (previewPost.id ? `/api/posts/${previewPost.id}/preview` : undefined) ||
+                    previewPost.thumbnailUrl ||
+                    previewPost.thumbnailImagePath
+                  }
+                  alt="Xem chi tiết ảnh"
+                  className="max-h-[54vh] sm:max-h-[58vh] max-w-full w-auto object-contain rounded-xl shadow-lg border border-white/5"
+                />
+              </div>
+
+              {/* Lời chúc & Thao tác duyệt/xóa trực tiếp */}
+              <div className="p-3.5 sm:p-5 bg-slate-950/90 border-t border-white/10 space-y-3 shrink-0">
+                <div className="max-h-24 overflow-y-auto custom-scrollbar pr-1">
+                  <p className="text-xs sm:text-sm text-slate-200 italic whitespace-pre-line border-l-2 border-amber-500/60 pl-3 leading-relaxed">
+                    {previewPost.message}
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 pt-1 border-t border-white/10">
+                  <span className="text-[11px] text-slate-400 font-mono hidden sm:inline">
+                    {previewPost.isPinned ? 'Bài đang được ghim' : 'Kỷ niệm 15 năm IRIS'}
+                  </span>
+
+                  <div className="flex items-center gap-2 ml-auto">
+                    {/* Nếu là bài chưa duyệt (nằm trong pendingPosts) */}
+                    {pendingPosts.some((p) => p.id === previewPost.id) ? (
+                      <>
+                        <button
+                          type="button"
+                          disabled={loadingPosts[previewPost.id]}
+                          onClick={async () => {
+                            const id = previewPost.id;
+                            setPreviewPost(null);
+                            await handleApproveAction(id, true);
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold shadow-sm transition-all"
+                        >
+                          <Check className="w-4 h-4" />
+                          <span>Duyệt bài này</span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={loadingPosts[previewPost.id]}
+                          onClick={async () => {
+                            const id = previewPost.id;
+                            setPreviewPost(null);
+                            await handleApproveAction(id, false);
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 rounded-lg text-xs font-bold transition-all"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          <span>Từ chối & Xóa</span>
+                        </button>
+                      </>
+                    ) : (
+                      <span className="text-xs text-emerald-400 font-semibold px-2.5 py-1 bg-emerald-500/10 rounded border border-emerald-500/20">
+                        Đã duyệt hiển thị
+                      </span>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => setPreviewPost(null)}
+                      className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-semibold transition-colors"
+                    >
+                      Đóng
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 };

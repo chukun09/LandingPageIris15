@@ -534,6 +534,24 @@ public sealed class PostService : IPostService
         return true;
     }
 
+    public async Task<int> ApproveAllPendingPostsAsync(CancellationToken ct)
+    {
+        var pendingPosts = await _context.MemoryPosts
+            .Where(p => !p.IsApproved)
+            .ToListAsync(ct);
+
+        if (pendingPosts.Count == 0) return 0;
+
+        foreach (var post in pendingPosts)
+        {
+            post.IsApproved = true;
+        }
+
+        await _context.SaveChangesAsync(ct);
+        InvalidateApprovedCaches();
+        return pendingPosts.Count;
+    }
+
     private void InvalidateApprovedCaches()
     {
         _cache.Remove(ApprovedPostsKey);

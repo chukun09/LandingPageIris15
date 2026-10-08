@@ -90,6 +90,18 @@ public static class AdminEndpoints
         .WithSummary("Ghim hoặc bỏ ghim bài viết lên đầu")
         .WithDescription("Ghim bài viết để luôn ưu tiên hiển thị ở đầu danh sách ký ức.");
 
+        // 2c. Duyệt toàn bộ bài viết đang chờ
+        protectedGroup.MapPost("/posts/approve-all", async Task<Ok<ApproveAllResponse>> (
+            IPostService postService,
+            CancellationToken ct) =>
+        {
+            var count = await postService.ApproveAllPendingPostsAsync(ct);
+            return TypedResults.Ok(new ApproveAllResponse(count, $"Đã duyệt toàn bộ {count} bài viết thành công."));
+        })
+        .WithName("ApproveAllPendingPosts")
+        .WithSummary("Duyệt toàn bộ bài viết đang chờ")
+        .WithDescription("Chuyển trạng thái IsApproved = true cho toàn bộ bài viết chưa được duyệt trong một thao tác duy nhất.");
+
         // 3. Chuyển đổi bài viết đã duyệt thành Podcast AI
         protectedGroup.MapPost("/posts/{id:int}/podcast", async Task<Results<Ok<PodcastResponse>, BadRequest<string>, NotFound>> (
             int id,
@@ -296,3 +308,8 @@ public sealed record GeneratePodcastRequest(
 /// Yêu cầu ghim hoặc bỏ ghim bài viết.
 /// </summary>
 public sealed record PinPostRequest(bool? IsPinned);
+
+/// <summary>
+/// Kết quả duyệt toàn bộ bài viết.
+/// </summary>
+public sealed record ApproveAllResponse(int Count, string Message);

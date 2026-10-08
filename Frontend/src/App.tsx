@@ -333,6 +333,29 @@ function App() {
     }
   };
 
+  const handleApproveAllPosts = async () => {
+    try {
+      const res = await fetch('/api/admin/posts/approve-all', {
+        method: 'POST',
+        headers: getAdminHeaders(),
+      });
+      if (res.status === 401) {
+        handleAuthExpired();
+        return;
+      }
+      if (res.ok) {
+        const data = await res.json();
+        triggerToast(data.message || `Đã duyệt toàn bộ ${data.count ?? ''} bài viết thành công!`);
+        fetchPending();
+        fetchData();
+      } else {
+        triggerToast('Thao tác duyệt tất cả thất bại.', 'error');
+      }
+    } catch {
+      triggerToast('Lỗi mạng kết nối.', 'error');
+    }
+  };
+
   const handleTogglePin = async (id: number, isPinned?: boolean) => {
     try {
       const res = await fetch(`/api/admin/posts/${id}/pin`, {
@@ -844,6 +867,7 @@ function App() {
             approvedPosts={approvedPosts}
             podcasts={podcasts}
             onApprove={handleApprovePost}
+            onApproveAll={handleApproveAllPosts}
             onTogglePin={handleTogglePin}
             onGeneratePodcast={handleGeneratePodcast}
             onUploadPodcast={handleUploadPodcast}

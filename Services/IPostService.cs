@@ -34,6 +34,7 @@ public interface IPostService
     Task<IReadOnlyList<PostResponse>> GetApprovedPostsAsync(CancellationToken ct);
     Task<IReadOnlyList<MemoryPost>> GetPendingPostsAsync(CancellationToken ct);
     Task<bool> ApprovePostAsync(int id, bool approve, CancellationToken ct);
+    Task<int> ApproveAllPendingPostsAsync(CancellationToken ct);
     Task<bool> VotePostAsync(int id, CancellationToken ct);
     Task<bool> TogglePinPostAsync(int id, bool? isPinned, CancellationToken ct);
     // GenerateBackdropAsync đã được gỡ: việc dựng file in chuyển sang
