@@ -203,36 +203,89 @@ export const MemoryCardExportModal: React.FC<MemoryCardExportModalProps> = ({
       ctx.textAlign = 'left';
       ctx.fillText('“', 165, quoteBoxY + 70);
 
-      // Nội dung lời chúc (chia dòng văn bản)
-      ctx.fillStyle = isLight ? '#1A253B' : '#F1F5F9';
-      ctx.font = '24px "Be Vietnam Pro", sans-serif';
-      ctx.letterSpacing = '0px';
-
-      const words = post.message.split(' ');
-      let line = '';
-      let textY = quoteBoxY + 80;
-      const maxWidth = imgW - 80;
-      const lineHeight = 38;
-      const maxLines = 5;
-      let lineCount = 0;
-
-      for (let n = 0; n < words.length; n++) {
-        const testLine = line + words[n] + ' ';
-        const metrics = ctx.measureText(testLine);
-        if (metrics.width > maxWidth && n > 0) {
-          ctx.fillText(line, 180, textY);
-          line = words[n] + ' ';
-          textY += lineHeight;
-          lineCount++;
-          if (lineCount >= maxLines - 1) {
-            line += '...';
-            break;
-          }
-        } else {
-          line = testLine;
+      // Nội dung lời chúc (giữ nguyên định dạng xuống dòng và chia đoạn văn bản)
+      const rawParagraphs = post.message.split(/\r?\n/);
+      const paragraphs: string[] = [];
+      for (const p of rawParagraphs) {
+        const trimmed = p.trim();
+        if (trimmed) {
+          paragraphs.push(trimmed);
         }
       }
-      ctx.fillText(line, 180, textY);
+
+      // Tự động tinh chỉnh cỡ chữ theo độ dài và số lượng đoạn văn
+      const totalChars = post.message.length;
+      let fontSize = 24;
+      let lineHeight = 38;
+      let paragraphGap = 12;
+      let textY = quoteBoxY + 75;
+
+      if (totalChars > 260 || paragraphs.length >= 4) {
+        fontSize = 19;
+        lineHeight = 29;
+        paragraphGap = 8;
+        textY = quoteBoxY + 64;
+      } else if (totalChars > 140 || paragraphs.length >= 2) {
+        fontSize = 21;
+        lineHeight = 33;
+        paragraphGap = 10;
+        textY = quoteBoxY + 70;
+      }
+
+      ctx.fillStyle = isLight ? '#1A253B' : '#F1F5F9';
+      ctx.font = `500 ${fontSize}px "Be Vietnam Pro", sans-serif`;
+      ctx.letterSpacing = '0px';
+
+      const maxWidth = imgW - 80;
+      const maxTextBottom = quoteBoxY + quoteBoxH - 80;
+      let isTruncated = false;
+
+      for (let pIdx = 0; pIdx < paragraphs.length; pIdx++) {
+        const pText = paragraphs[pIdx];
+        const words = pText.split(/\s+/);
+        let line = '';
+
+        for (let wIdx = 0; wIdx < words.length; wIdx++) {
+          const testLine = line ? `${line} ${words[wIdx]}` : words[wIdx];
+          const metrics = ctx.measureText(testLine);
+
+          if (metrics.width > maxWidth && line) {
+            if (textY + lineHeight > maxTextBottom) {
+              ctx.fillText(line + '...', 180, textY);
+              isTruncated = true;
+              break;
+            }
+            ctx.fillText(line, 180, textY);
+            line = words[wIdx];
+            textY += lineHeight;
+          } else {
+            line = testLine;
+          }
+        }
+
+        if (isTruncated) break;
+
+        if (line) {
+          if (textY > maxTextBottom) {
+            isTruncated = true;
+            break;
+          }
+          if (pIdx < paragraphs.length - 1 && textY + lineHeight + paragraphGap > maxTextBottom) {
+            ctx.fillText(line + '...', 180, textY);
+            isTruncated = true;
+            break;
+          }
+          ctx.fillText(line, 180, textY);
+        }
+
+        if (pIdx < paragraphs.length - 1) {
+          textY += lineHeight + paragraphGap;
+          if (textY > maxTextBottom) {
+            isTruncated = true;
+            break;
+          }
+        }
+      }
 
       // Phòng ban & Ngày tháng
       ctx.fillStyle = isLight ? '#A6701A' : '#F5D77F';

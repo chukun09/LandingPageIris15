@@ -43,8 +43,8 @@ public sealed class ViXttsProvider : ITtsProvider
             ? voiceConfig 
             : (_configuration["TtsSettings:ViXtts:SpeakerWav"] ?? "voices/default_vietnamese.wav");
 
-        var speed = _configuration.GetValue<double>("TtsSettings:ViXtts:Speed", 1.03);
-        var temperature = _configuration.GetValue<double>("TtsSettings:ViXtts:Temperature", 0.72);
+        var speed = _configuration.GetValue<double>("TtsSettings:ViXtts:Speed", 1.12);
+        var temperature = _configuration.GetValue<double>("TtsSettings:ViXtts:Temperature", 0.55);
 
         var payload = new
         {

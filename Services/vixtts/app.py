@@ -247,14 +247,68 @@ def smart_chunk_vietnamese_text(text: str, max_chars: int = 220) -> list:
 
     return guaranteed_chunks
 
+def clean_and_normalize_wav(file_path: str, fade_ms: int = 15, target_peak_ratio: float = 0.92):
+    """
+    Khử triệt để tiếng rè/bụp ở đầu và cuối câu (Transient Onset Artifact) bằng Smooth S-curve Fade
+    và chuẩn hóa âm lượng Peak Normalization về 92% chống vỡ/méo tiếng (clipping).
+    """
+    if not os.path.exists(file_path):
+        return
+    try:
+        with wave.open(file_path, 'rb') as w:
+            params = w.getparams()
+            sample_rate = params.framerate
+            n_channels = params.nchannels
+            sampwidth = params.sampwidth
+            n_frames = w.getnframes()
+            if n_frames == 0 or sampwidth != 2:
+                return
+            raw = w.readframes(n_frames)
+
+        total_samples = n_frames * n_channels
+        fmt = f'<{total_samples}h'
+        samples = list(struct.unpack(fmt, raw))
+        if not samples:
+            return
+
+        # 1. Smooth Fade-in ở đầu (fade_ms) - triệt tiêu 100% tiếng bụp/rè khi bắt đầu phát âm
+        fade_samples = min(int(sample_rate * (fade_ms / 1000.0)) * n_channels, len(samples) // 4)
+        if fade_samples > 0:
+            for i in range(fade_samples):
+                factor = (1.0 - math.cos(math.pi * i / fade_samples)) / 2.0
+                samples[i] = int(samples[i] * factor)
+
+        # 2. Smooth Fade-out ở cuối (fade_ms)
+        if fade_samples > 0:
+            for i in range(fade_samples):
+                idx = len(samples) - 1 - i
+                factor = (1.0 - math.cos(math.pi * i / fade_samples)) / 2.0
+                samples[idx] = int(samples[idx] * factor)
+
+        # 3. Peak Normalization về 92% biên độ tối đa chống méo tiếng / clipping
+        max_amp = max(abs(s) for s in samples)
+        if max_amp > 0:
+            target_amp = int(32767 * target_peak_ratio)
+            if max_amp > target_amp or max_amp < 18000:
+                scale = target_amp / float(max_amp)
+                samples = [max(-32768, min(32767, int(s * scale))) for s in samples]
+
+        cleaned_raw = struct.pack(fmt, *samples)
+        with wave.open(file_path, 'wb') as w:
+            w.setparams(params)
+            w.writeframes(cleaned_raw)
+    except Exception:
+        pass
+
 def combine_wav_files(wav_paths: list, output_path: str, pause_sec: float = 0.14):
-    """Ghép nối nhiều tệp WAV với khoảng lặng tự nhiên 140ms giữa các câu."""
+    """Ghép nối nhiều tệp WAV với khoảng lặng tự nhiên 140ms giữa các câu và khử tiếng nổ ở mối nối."""
     if not wav_paths:
         return
     if len(wav_paths) == 1:
         if wav_paths[0] != output_path:
             import shutil
             shutil.copyfile(wav_paths[0], output_path)
+        clean_and_normalize_wav(output_path, fade_ms=15, target_peak_ratio=0.92)
         return
 
     with wave.open(wav_paths[0], 'rb') as first_wav:
@@ -269,10 +323,13 @@ def combine_wav_files(wav_paths: list, output_path: str, pause_sec: float = 0.14
     with wave.open(output_path, 'wb') as out_wav:
         out_wav.setparams(params)
         for i, path in enumerate(wav_paths):
+            clean_and_normalize_wav(path, fade_ms=6, target_peak_ratio=0.92)
             with wave.open(path, 'rb') as in_wav:
                 out_wav.writeframes(in_wav.readframes(in_wav.getnframes()))
             if i < len(wav_paths) - 1:
                 out_wav.writeframes(silence_bytes)
+
+    clean_and_normalize_wav(output_path, fade_ms=15, target_peak_ratio=0.92)
 
 def apply_tokenizer_safeguard(model):
     """
@@ -321,8 +378,8 @@ class TTSRequest(BaseModel):
     text: str
     speaker_wav: str = "voices/default_vietnamese.wav"
     language: str = "vi"
-    speed: float = 1.03
-    temperature: float = 0.72
+    speed: float = 1.12
+    temperature: float = 0.55
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -433,13 +490,13 @@ async def generate_tts(request: TTSRequest):
         # Chuẩn hóa tiếng Việt thuần (chuyển chữ số và từ viết tắt sang tiếng Việt tự nhiên)
         normalized_text = normalize_vietnamese_text(request.text)
 
-        # Phân đoạn thông minh (Smart Chunker): mỗi đoạn < 150 ký tự để không vượt quá giới hạn 250 ký tự của Coqui XTTS
-        chunks = smart_chunk_vietnamese_text(normalized_text, max_chars=150)
+        # Phân đoạn thông minh (Smart Chunker): mỗi đoạn < 180 ký tự để giữ câu trọn vẹn
+        chunks = smart_chunk_vietnamese_text(normalized_text, max_chars=180)
         if not chunks:
             chunks = [normalized_text]
 
-        effective_speed = request.speed if (request.speed and request.speed > 0) else 1.03
-        effective_temp = request.temperature if (request.temperature and request.temperature > 0) else 0.72
+        effective_speed = request.speed if (request.speed and request.speed > 0) else 1.12
+        effective_temp = request.temperature if (request.temperature and request.temperature > 0) else 0.55
 
         logger.info(
             "Sinh âm thanh tiếng Việt thuần (%d chunks, Speed=%.2f, Temp=%.2f, SpeakerWav='%s')",
@@ -461,6 +518,7 @@ async def generate_tts(request: TTSRequest):
                     top_k=50,
                     top_p=0.82
                 )
+                clean_and_normalize_wav(output_path, fade_ms=15, target_peak_ratio=0.92)
             else:
                 for idx, chunk in enumerate(chunks):
                     chunk_path = os.path.join(output_dir, f"chunk_{uuid.uuid4().hex[:8]}_{idx}.wav")

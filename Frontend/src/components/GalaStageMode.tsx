@@ -83,7 +83,7 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
       </div>
 
       {/* Header sân khấu */}
-      <header className="relative z-10 p-3 sm:p-6 md:p-8 flex items-center justify-between gap-3 border-b border-white/10 bg-slate-950/60 backdrop-blur-md">
+      <header className="relative z-10 p-3 sm:p-5 md:p-6 flex items-center justify-between gap-3 border-b border-white/10 bg-slate-950/60 backdrop-blur-md shrink-0">
         <div className="flex items-center gap-2 sm:gap-4 min-w-0">
           <div className="bg-white/95 rounded-xl px-2 py-1 sm:px-3 sm:py-1.5 shadow-md shrink-0">
             <picture>
@@ -122,7 +122,7 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
       </header>
 
       {/* Khu vực trình chiếu chính (Ken Burns Effect) */}
-      <main className="relative z-10 flex-1 flex items-center justify-center p-3 sm:p-6 md:p-12 overflow-y-auto">
+      <main className="relative z-10 flex-1 flex items-center justify-center p-3 sm:p-5 md:p-8 min-h-0 overflow-y-auto">
         <AnimatePresence mode="wait">
           {activePost && (
             <motion.div
@@ -131,10 +131,10 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 1.05 }}
               transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
-              className="max-w-5xl w-full grid grid-cols-1 md:grid-cols-12 gap-4 sm:gap-6 md:gap-8 items-center bg-slate-900/80 border border-amber-500/30 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-10 shadow-2xl backdrop-blur-xl"
+              className="max-w-5xl w-full max-h-full grid grid-cols-1 md:grid-cols-12 gap-4 sm:gap-6 md:gap-8 items-center bg-slate-900/80 border border-amber-500/30 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 shadow-2xl backdrop-blur-xl"
             >
               {/* Cột ảnh chất lượng cao với Ambient Fill cho mọi tỉ lệ ảnh */}
-              <div className="md:col-span-6 aspect-[4/3] rounded-xl sm:rounded-2xl overflow-hidden border border-amber-500/40 relative shadow-lg bg-slate-950 flex items-center justify-center">
+              <div className="md:col-span-6 aspect-[4/3] max-h-[32vh] sm:max-h-[42vh] md:max-h-[56vh] rounded-xl sm:rounded-2xl overflow-hidden border border-amber-500/40 relative shadow-lg bg-slate-950 flex items-center justify-center shrink-0">
                 {/* Lớp nền mờ Ambient cho ảnh không đúng khung 4:3 */}
                 <img
                   src={getPostImageUrl(activePost)}
@@ -156,10 +156,10 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
               </div>
 
               {/* Cột nội dung lời chúc */}
-              <div className="md:col-span-6 space-y-4 sm:space-y-6">
-                <div className="space-y-1.5 sm:space-y-2">
+              <div className="md:col-span-6 flex flex-col justify-between h-full min-h-0 space-y-3 sm:space-y-4">
+                <div className="shrink-0 space-y-1 sm:space-y-1.5">
                   <div className="flex items-center gap-2 text-amber-400">
-                    <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
+                    <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
                     <span className="text-[10px] sm:text-xs font-mono font-bold tracking-wider">
                       MẢNH GHÉP SỐ #{activePost.id}
                     </span>
@@ -169,16 +169,22 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
                   </h2>
                 </div>
 
-                <div className="relative pl-5 sm:pl-6 border-l-2 border-amber-500/50">
-                  <span className="absolute -top-2 -left-2 sm:-top-3 sm:-left-3 text-4xl sm:text-5xl text-amber-400/20 font-serif">“</span>
-                  <p className="text-sm sm:text-base md:text-xl text-slate-200 leading-relaxed italic whitespace-pre-line">
+                <div className="relative pl-4 sm:pl-6 border-l-2 border-amber-500/50 flex-1 min-h-0 overflow-y-auto max-h-[34vh] sm:max-h-[42vh] md:max-h-[48vh] pr-2 custom-scrollbar my-1">
+                  <span className="absolute -top-2 -left-2 sm:-top-3 sm:-left-3 text-4xl sm:text-5xl text-amber-400/20 font-serif select-none pointer-events-none">“</span>
+                  <p className={`text-slate-200 leading-relaxed italic whitespace-pre-line ${
+                    activePost.message.length > 350
+                      ? 'text-xs sm:text-sm md:text-base'
+                      : activePost.message.length > 180
+                        ? 'text-sm sm:text-base md:text-lg'
+                        : 'text-sm sm:text-base md:text-xl'
+                  }`}>
                     {activePost.message.normalize('NFC')}
                   </p>
                 </div>
 
-                <div className="flex items-center justify-between pt-3 sm:pt-4 border-t border-white/10 text-[10px] sm:text-xs text-white/60 font-mono">
+                <div className="shrink-0 flex items-center justify-between pt-2 sm:pt-3 border-t border-white/10 text-[10px] sm:text-xs text-white/60 font-mono">
                   <div className="flex items-center gap-2">
-                    <Award className="w-4 h-4 text-amber-400" />
+                    <Award className="w-4 h-4 text-amber-400 shrink-0" />
                     <span>IRIS 15 Years of Pride</span>
                   </div>
                   <span>{new Date(activePost.createdAt).toLocaleDateString('vi-VN')}</span>
@@ -190,7 +196,7 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
       </main>
 
       {/* Thanh điều khiển dưới đáy */}
-      <footer className="relative z-10 p-3 sm:p-4 md:p-6 flex items-center justify-between gap-3 border-t border-white/10 bg-slate-950/60 backdrop-blur-md">
+      <footer className="relative z-10 p-3 sm:p-4 md:p-5 flex items-center justify-between gap-3 border-t border-white/10 bg-slate-950/60 backdrop-blur-md shrink-0">
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <button
             onClick={() => setCurrentIndex((p) => (p - 1 + posts.length) % posts.length)}
