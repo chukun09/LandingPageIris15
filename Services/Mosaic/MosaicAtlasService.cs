@@ -48,9 +48,7 @@ public interface IMosaicAtlasService
 /// </remarks>
 public sealed class MosaicAtlasService(
     IServiceScopeFactory scopeFactory,
-    Imaging.IImagePolicy imagePolicy,
-    IWebHostEnvironment environment,
-    Storage.IStorageService? storageService = null) : IMosaicAtlasService
+    Imaging.IImagePolicy imagePolicy) : IMosaicAtlasService
 {
     /// <summary>Bề rộng atlas cố định. WebGL2 bảo đảm MAX_TEXTURE_SIZE ≥ 2048.</summary>
     public const int AtlasWidth = 2048;
@@ -88,8 +86,7 @@ public sealed class MosaicAtlasService(
         {
             if (_cache.TryGetValue(key, out cached)) return cached;
 
-            var thumbnails = await postService.GetThumbnailPathsAsync(ct);
-            var atlas = await BuildAsync(tileSize, ordered, thumbnails, key, ct);
+            var atlas = await BuildAsync(tileSize, ordered, postService, key, ct);
 
             if (_cache.Count > 8) _cache.Clear();
             _cache[key] = atlas;
@@ -104,7 +101,7 @@ public sealed class MosaicAtlasService(
     private async Task<MosaicAtlas> BuildAsync(
         int tileSize,
         List<MosaicPostRef> ordered,
-        IReadOnlyDictionary<int, string> thumbnails,
+        IPostService postService,
         string key,
         CancellationToken ct)
     {
@@ -113,9 +110,6 @@ public sealed class MosaicAtlasService(
         int rows = Math.Max(1, (int)Math.Ceiling((double)count / columns));
         int height = rows * tileSize;
 
-        var webRoot = environment.WebRootPath
-                      ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
-
         var configuration = imagePolicy.Configuration;
         using var canvas = new Image<Rgba32>(configuration, AtlasWidth, height);
 
@@ -123,27 +117,15 @@ public sealed class MosaicAtlasService(
         {
             ct.ThrowIfCancellationRequested();
 
-            if (!thumbnails.TryGetValue(ordered[i].Id, out var relativePath)) continue;
-
+            int postId = ordered[i].Id;
             Stream? stream = null;
-            if (storageService != null)
-            {
-                stream = await storageService.GetFileStreamAsync(relativePath, ct);
-            }
-            else
-            {
-                var path = Path.Combine(webRoot, relativePath.TrimStart('/', '\\')
-                                                             .Replace('/', Path.DirectorySeparatorChar));
-                if (File.Exists(path))
-                {
-                    stream = File.OpenRead(path);
-                }
-            }
-
-            if (stream == null) continue;
-
             try
             {
+                stream = await postService.GetPreviewStreamAsync(postId, ct)
+                         ?? await postService.GetThumbnailStreamAsync(postId, ct);
+
+                if (stream == null) continue;
+
                 using (stream)
                 using (var tile = await Image.LoadAsync<Rgba32>(configuration, stream, ct))
                 {
