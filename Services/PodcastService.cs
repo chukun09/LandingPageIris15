@@ -410,10 +410,17 @@ public sealed partial class PodcastService : IPodcastService
         // 3. Loại bỏ ký tự trang trí, bullet points, ký hiệu code không lời
         text = DecorationRegex().Replace(text, " ");
 
+        // 3b. Loại bỏ triệt để mọi loại dấu nháy đơn, nháy kép, dấu trích dẫn, backtick
+        text = QuoteRegex().Replace(text, " ");
+
         // 4. Gom dấu câu lặp lại (!!! -> !, ??? -> ?, .... -> ...)
         text = MultipleExclamationRegex().Replace(text, "!");
         text = MultipleQuestionRegex().Replace(text, "?");
         text = MultipleDotRegex().Replace(text, "...");
+
+        // 4b. Chuẩn hóa xuống dòng: nếu dòng kết thúc chưa có dấu kết thúc câu, chèn dấu chấm
+        text = NewlineSentenceRegex().Replace(text, "$1. ");
+        text = text.Replace("\r", " ").Replace("\n", " ");
 
         // 5. Chuẩn hóa khoảng trắng
         text = WhitespaceRegex().Replace(text, " ").Trim();
@@ -427,8 +434,14 @@ public sealed partial class PodcastService : IPodcastService
     [GeneratedRegex(@"[\uD83C-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27BF]|[\uFE00-\uFE0F]|[\u200D\u20E3\u2B50\u2B55\u231A\u231B\u23E9-\u23EC\u23F0\u23F3]", RegexOptions.Compiled)]
     private static partial Regex EmojiRegex();
 
-    [GeneratedRegex(@"[*~#^_|\\<>{}\[\]=•●◆■★☆►▸▶]+", RegexOptions.Compiled)]
+    [GeneratedRegex(@"[*~#^_|\\<>{}\[\]=•●◆■★☆►▸▶/]+", RegexOptions.Compiled)]
     private static partial Regex DecorationRegex();
+
+    [GeneratedRegex(@"['""`“”‘’„«»´′″]+", RegexOptions.Compiled)]
+    private static partial Regex QuoteRegex();
+
+    [GeneratedRegex(@"([^.!?\s])\s*[\r\n]+", RegexOptions.Compiled)]
+    private static partial Regex NewlineSentenceRegex();
 
     [GeneratedRegex(@"!+", RegexOptions.Compiled)]
     private static partial Regex MultipleExclamationRegex();

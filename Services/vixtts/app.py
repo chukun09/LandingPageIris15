@@ -116,7 +116,10 @@ def clean_emojis_and_symbols(text: str) -> str:
     text = emoji_pattern.sub(' ', text)
 
     # 3. Ký tự trang trí, bullet points, ký hiệu code không dùng khi đọc
-    text = re.sub(r'[*~#^_|\\<>{}\[\]=•●◆■★☆►▸▶]+', ' ', text)
+    text = re.sub(r'[*~#^_|\\<>{}\[\]=•●◆■★☆►▸▶/]+', ' ', text)
+
+    # 3b. Loại bỏ triệt để mọi loại dấu nháy đơn, nháy kép, dấu trích dẫn, backtick (tránh XTTS đọc lằng nhằng hoặc rè âm)
+    text = re.sub(r'[\'"`“”‘’„«»´′″\u2018\u2019\u201C\u201D\u0027\u0022]+', ' ', text)
 
     # 4. Gom dấu câu lặp lại: !!! -> !, ??? -> ?, .... -> ...
     text = re.sub(r'!+', '!', text)
@@ -132,17 +135,25 @@ def normalize_vietnamese_text(text: str) -> str:
     # 0. Loại bỏ hoàn toàn emojis, text emoticons và ký tự trang trí
     text = clean_emojis_and_symbols(text)
 
-    # 1. Số thập phân (vd: 4.0 -> bốn chấm không) và dải số (vd: 2-6 -> 2 đến 6)
+    # 1. Chuẩn hóa xuống dòng \n:
+    # Nếu dòng kết thúc chưa có dấu câu (. ! ?), chèn dấu chấm để tách câu rành mạch (vd: Tiêu đề -> Tiêu đề.)
+    text = re.sub(r'([^.!?\s])\s*\n+', r'\1. ', text)
+    # Nếu dòng đã kết thúc bằng dấu phẩy (,), thay bằng dấu phẩy và khoảng trắng để nối câu sau mượt mà
+    text = re.sub(r',\s*\n+', r', ', text)
+    # Các dấu xuống dòng còn lại đổi thành khoảng trắng
+    text = re.sub(r'\n+', ' ', text)
+
+    # 2. Số thập phân (vd: 4.0 -> bốn chấm không) và dải số (vd: 2-6 -> 2 đến 6)
     text = re.sub(r'(\d+)\.(\d+)', r'\1 chấm \2', text)
     text = re.sub(r'(\d+)\s*-\s*(\d+)', r'\1 đến \2', text)
 
-    # 2. Ký hiệu phổ biến
+    # 3. Ký hiệu phổ biến
     text = text.replace('%', ' phần trăm ')
     text = text.replace('&', ' và ')
     text = text.replace('+', ' cộng ')
     text = text.replace('@', ' a còng ')
 
-    # 3. Từ viết tắt đặc thù doanh nghiệp (khớp chính xác chữ hoa, không dùng gạch nối tránh khựng âm)
+    # 4. Từ viết tắt đặc thù doanh nghiệp (khớp chính xác chữ hoa, không dùng gạch nối tránh khựng âm)
     exact_acronyms = [
         (r'\bAI\b', 'Ây ai'),
         (r'\bCNTT\b', 'Công nghệ thông tin'),
@@ -155,7 +166,7 @@ def normalize_vietnamese_text(text: str) -> str:
     for pattern, rep in exact_acronyms:
         text = re.sub(pattern, rep, text)
 
-    # 4. Thương hiệu & thuật ngữ tiếng Anh thông dụng (không phân biệt hoa thường, không dùng gạch nối)
+    # 5. Thương hiệu & thuật ngữ tiếng Anh thông dụng (không phân biệt hoa thường, không dùng gạch nối)
     case_insensitive = [
         (r'\bIRIS TECH\b', 'Iris Tech'),
         (r'\bIRIS\b', 'Iris'),
@@ -168,7 +179,7 @@ def normalize_vietnamese_text(text: str) -> str:
     for pattern, rep in case_insensitive:
         text = re.sub(pattern, rep, text, flags=re.IGNORECASE)
 
-    # 5. Chuyển đổi toàn bộ con số nguyên thành chữ tiếng Việt
+    # 6. Chuyển đổi toàn bộ con số nguyên thành chữ tiếng Việt
     def replace_num(match):
         num_str = match.group(0)
         try:
@@ -178,35 +189,55 @@ def normalize_vietnamese_text(text: str) -> str:
             return num_str
 
     text = re.sub(r'\b\d+\b', replace_num, text)
+
+    # 7. Khử dấu câu xung đột liền kề nhau: vd: ,. hoặc ., hoặc ,, hoặc .!
+    text = re.sub(r'[,;:–—]+\s*([.!?])', r'\1', text)
+    text = re.sub(r'([.!?])\s*[,;:–—]+', r'\1', text)
+    text = re.sub(r'[,;:–—]{2,}', ',', text)
+    text = re.sub(r'\.{4,}', '...', text)
     text = re.sub(r'\s+', ' ', text).strip()
     return text
 
-def smart_chunk_vietnamese_text(text: str, max_chars: int = 220) -> list:
+def smart_chunk_vietnamese_text(text: str, max_chars: int = 240) -> list:
     """
-    Phân đoạn văn bản tiếng Việt thông minh thành các câu trọn vẹn từ 80-220 ký tự,
-    giữ trọn ngữ điệu tự nhiên và nhịp thở của câu, không bị băm vụn ở dấu phẩy,
-    tuyệt đối không vượt quá giới hạn 250 ký tự của mô hình Coqui XTTS.
+    Phân đoạn văn bản tiếng Việt thông minh thành các câu trọn vẹn từ 70-240 ký tự,
+    giữ trọn ngữ điệu tự nhiên và nhịp thở của câu, không bị băm vụn ở giữa câu,
+    tuyệt đối không cắt ngang cụm từ ngữ/con số và không vượt quá giới hạn mô hình Coqui XTTS.
     """
     if not text or not text.strip():
         return []
 
-    # 1. Tách theo dấu kết thúc câu (. ! ? hoặc xuống dòng)
-    raw_sentences = re.split(r'([.!?\n]+)', text)
+    # 1. Tách theo dấu kết thúc câu thực sự (. ! ?)
+    raw_sentences = re.split(r'([.!?]+)', text)
     sentences = []
     for i in range(0, len(raw_sentences), 2):
         s = raw_sentences[i].strip()
         punct = raw_sentences[i + 1].strip() if i + 1 < len(raw_sentences) else '.'
-        if not punct or punct == '\n':
+        if not punct:
             punct = '.'
         if s:
             sentences.append(f"{s}{punct}")
 
+    # 2. Gộp các câu / tiêu đề quá ngắn (< 35 ký tự) vào câu sau để tránh XTTS bị thiếu context gây nói nhảm
+    merged_sentences = []
+    i = 0
+    while i < len(sentences):
+        cur = sentences[i]
+        # Nếu câu hiện tại quá ngắn và còn câu tiếp theo, thử gộp
+        while len(cur) < 35 and i + 1 < len(sentences) and len(cur) + len(sentences[i + 1]) + 1 <= max_chars:
+            cur = f"{cur} {sentences[i + 1]}"
+            i += 1
+        merged_sentences.append(cur)
+        i += 1
+
+    # 3. Với các câu dài > max_chars, ngắt thông minh tại dấu phẩy, chấm phẩy hoặc liên từ tự nhiên
     final_chunks = []
-    for s in sentences:
+    for s in merged_sentences:
         if len(s) <= max_chars:
             final_chunks.append(s)
             continue
 
+        # Cố gắng tách tại dấu phẩy, chấm phẩy, hai chấm, gạch ngang
         raw_clauses = re.split(r'([,;:–—]+)', s)
         clauses = []
         for j in range(0, len(raw_clauses), 2):
@@ -222,30 +253,28 @@ def smart_chunk_vietnamese_text(text: str, max_chars: int = 220) -> list:
             elif len(buf) + len(c) + 1 <= max_chars:
                 buf += " " + c
             else:
+                # Đảm bảo cuối chunk có dấu ngắt câu tự nhiên
+                if not re.search(r'[.!?]$', buf):
+                    buf = re.sub(r'[,;:–—]+$', '', buf).strip() + '.'
                 final_chunks.append(buf)
                 buf = c
         if buf:
+            if not re.search(r'[.!?]$', buf):
+                buf = re.sub(r'[,;:–—]+$', '', buf).strip() + '.'
             final_chunks.append(buf)
 
-    guaranteed_chunks = []
+    # 4. Kiểm tra an toàn cuối cùng và chuẩn hóa đuôi câu
+    cleaned_chunks = []
     for ch in final_chunks:
-        if len(ch) <= max_chars:
-            guaranteed_chunks.append(ch)
-        else:
-            words = ch.split()
-            cur = ""
-            for w in words:
-                if not cur:
-                    cur = w
-                elif len(cur) + len(w) + 1 <= max_chars:
-                    cur += " " + w
-                else:
-                    guaranteed_chunks.append(cur + ".")
-                    cur = w
-            if cur:
-                guaranteed_chunks.append(cur)
+        ch = ch.strip()
+        if not ch:
+            continue
+        # Chuẩn hóa đuôi câu luôn kết thúc bằng . ! ? (không kết thúc bằng dấu phẩy)
+        if not re.search(r'[.!?]$', ch):
+            ch = re.sub(r'[,;:–—]+$', '', ch).strip() + '.'
+        cleaned_chunks.append(ch)
 
-    return guaranteed_chunks
+    return cleaned_chunks
 
 def clean_and_normalize_wav(file_path: str, fade_ms: int = 15, target_peak_ratio: float = 0.92):
     """
@@ -490,8 +519,8 @@ async def generate_tts(request: TTSRequest):
         # Chuẩn hóa tiếng Việt thuần (chuyển chữ số và từ viết tắt sang tiếng Việt tự nhiên)
         normalized_text = normalize_vietnamese_text(request.text)
 
-        # Phân đoạn thông minh (Smart Chunker): mỗi đoạn < 180 ký tự để giữ câu trọn vẹn
-        chunks = smart_chunk_vietnamese_text(normalized_text, max_chars=180)
+        # Phân đoạn thông minh (Smart Chunker): mỗi đoạn <= 240 ký tự giữ trọn vẹn câu
+        chunks = smart_chunk_vietnamese_text(normalized_text, max_chars=240)
         if not chunks:
             chunks = [normalized_text]
 

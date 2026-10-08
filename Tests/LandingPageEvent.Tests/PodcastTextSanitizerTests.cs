@@ -64,4 +64,21 @@ public class PodcastTextSanitizerTests
         // Assert
         Assert.Equal("Thật không thể tin được! Tuyệt cú mèo? Đúng vậy...", result);
     }
+
+    [Fact]
+    public void SanitizeTextForSpeech_RemovesQuotesAndHandlesNewlines()
+    {
+        // Arrange
+        var input = "'CHUYẾN ĐI NHỎ,'\nKỶ NIỆM LỚN\n\"Hành trình 15 năm\"";
+
+        // Act
+        var result = PodcastService.SanitizeTextForSpeech(input);
+
+        // Assert
+        Assert.DoesNotContain("'", result);
+        Assert.DoesNotContain("\"", result);
+        Assert.Contains("CHUYẾN ĐI NHỎ,", result);
+        Assert.Contains("KỶ NIỆM LỚN.", result);
+        Assert.Contains("Hành trình 15 năm", result);
+    }
 }
