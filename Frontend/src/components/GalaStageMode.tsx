@@ -171,8 +171,8 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
 
                 <div className="relative pl-5 sm:pl-6 border-l-2 border-amber-500/50">
                   <span className="absolute -top-2 -left-2 sm:-top-3 sm:-left-3 text-4xl sm:text-5xl text-amber-400/20 font-serif">“</span>
-                  <p className="text-sm sm:text-base md:text-xl text-slate-200 leading-relaxed italic font-serif whitespace-pre-line">
-                    {activePost.message}
+                  <p className="text-sm sm:text-base md:text-xl text-slate-200 leading-relaxed italic whitespace-pre-line">
+                    {activePost.message.normalize('NFC')}
                   </p>
                 </div>
 

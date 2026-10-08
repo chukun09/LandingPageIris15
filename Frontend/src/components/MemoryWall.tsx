@@ -219,13 +219,13 @@ const MemoryWallComponent: React.FC<MemoryWallProps> = ({
                       </div>
                     )}
                     <img
-                      src={post.thumbnailUrl || post.thumbnailImagePath || `/api/posts/${post.id}/thumbnail`}
+                      src={post.previewUrl || `/api/posts/${post.id}/preview` || post.thumbnailUrl || post.thumbnailImagePath}
                       alt="Memory photo"
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       loading="lazy"
                       decoding="async"
                       onError={(e) => {
-                        const fallback = post.previewUrl || `/api/posts/${post.id}/preview`;
+                        const fallback = post.thumbnailUrl || post.thumbnailImagePath || `/api/posts/${post.id}/thumbnail`;
                         if (fallback && !e.currentTarget.src.includes(fallback)) {
                           e.currentTarget.src = fallback;
                         } else {
