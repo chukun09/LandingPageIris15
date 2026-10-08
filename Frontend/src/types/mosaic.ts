@@ -21,8 +21,10 @@ export interface MosaicTile {
   letterId: string;
   /** Id bài viết, -1 nếu ô chưa có ảnh. */
   postId: number;
-  /** Thứ hạng gán ảnh; cũng chính là chỉ số ô trong sprite atlas. */
+  /** Thứ hạng gán ảnh; thứ tự theo lượt bình chọn. */
   rank: number;
+  /** Chỉ số ô trong sprite atlas (ổn định theo Id, không đổi khi vote). */
+  atlasSlot?: number;
 }
 
 export interface MosaicLayoutResponse {

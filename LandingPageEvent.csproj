@@ -4,6 +4,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- 512MB RAM optimization on Render: Workstation GC consumes far less base memory than Server GC -->
+    <ServerGarbageCollection>false</ServerGarbageCollection>
   </PropertyGroup>
 
   <!-- SDK gom mọi *.cs dưới thư mục gốc; loại dự án test và thư mục công cụ ra

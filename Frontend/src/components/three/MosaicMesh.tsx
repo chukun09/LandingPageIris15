@@ -216,7 +216,7 @@ export function MosaicMesh({
   // ── MỘT vòng useFrame duy nhất cho toàn bộ cảnh ──────────────────────────
   useFrame((frameState, delta) => {
     const mesh = meshRef.current;
-    if (!mesh) return;
+    if (!mesh || (typeof document !== 'undefined' && document.hidden)) return;
     const now = frameState.clock.elapsedTime;
 
     if (state.modeStart === -1) state.modeStart = now;

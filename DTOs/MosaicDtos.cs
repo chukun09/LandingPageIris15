@@ -10,7 +10,8 @@ public sealed record MosaicTileDto(
     [property: JsonPropertyName("r")] double[] R,
     [property: JsonPropertyName("letterId")] string LetterId,
     [property: JsonPropertyName("postId")] int PostId,
-    [property: JsonPropertyName("rank")] int Rank);
+    [property: JsonPropertyName("rank")] int Rank,
+    [property: JsonPropertyName("atlasSlot")] int AtlasSlot = -1);
 
 public sealed record MosaicLetterDto(
     string Id,

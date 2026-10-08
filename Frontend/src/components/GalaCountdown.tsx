@@ -70,7 +70,6 @@ export const GalaCountdown: React.FC = () => {
           ].map((item, idx) => (
             <div key={idx} className="flex flex-col items-center">
               <motion.div
-                key={item.value}
                 initial={{ scale: 0.92, opacity: 0.8 }}
                 animate={{ scale: 1, opacity: 1 }}
                 className="w-14 sm:w-16 h-16 sm:h-18 rounded-xl bg-brand-bg/80 border border-brand-border/80 flex items-center justify-center shadow-inner"

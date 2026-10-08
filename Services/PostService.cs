@@ -25,6 +25,7 @@ public sealed class PostService : IPostService
     private readonly IImagePolicy _imagePolicy;
     private readonly IMemoryCache _cache;
     private readonly Storage.IStorageService? _storageService;
+    private readonly ILogger<PostService> _logger;
     private readonly string _webRootPath;
 
     // Cache Keys & Synchronization cho chịu tải cao
@@ -32,6 +33,10 @@ public sealed class PostService : IPostService
     private const string ThumbnailPathsKey = "PostService_ThumbnailPaths";
     private const string OriginalPathsKey = "PostService_OriginalPaths";
     private static readonly SemaphoreSlim _cacheLock = new(1, 1);
+    private static readonly SemaphoreSlim _previewGenLock = new(1, 1);
+    // Ảnh gốc của bài cũ có thể tới 50 MP (nhận trước khi hạ trần 25 MP), vượt trần
+    // 128 MB của luồng upload. Chỉ dùng bên trong _previewGenLock nên chạy tuần tự.
+    private static SixLabors.ImageSharp.Configuration? s_legacyPreviewConfig;
 
     // Mặt nạ chữ "IRIS 15" trong lưới 8 hàng x 70 cột (Đã cân đối và vuông vắn)
     private static readonly string[] IrisMask = new[]
@@ -51,12 +56,14 @@ public sealed class PostService : IPostService
         IImagePolicy imagePolicy,
         IMemoryCache? cache = null,
         IConfiguration? configuration = null,
-        Storage.IStorageService? storageService = null)
+        Storage.IStorageService? storageService = null,
+        ILogger<PostService>? logger = null)
     {
         _context = context;
         _imagePolicy = imagePolicy;
         _cache = cache ?? new MemoryCache(new MemoryCacheOptions());
         _storageService = storageService;
+        _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<PostService>.Instance;
         // Thư mục lưu trữ tĩnh trong dự án
         _webRootPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
         EnsureDirectoriesExist();
@@ -620,15 +627,15 @@ public sealed class PostService : IPostService
             baseImage.Metadata.IptcProfile = null;
 
             // 2a. Sinh Preview giữ nguyên tỉ lệ gốc (tối đa 1600px, WebP Q82)
-            using var previewStream = new MemoryStream();
-            using (var previewImage = baseImage.Clone(x => x.Resize(new ResizeOptions
+            // Mutate trực tiếp trên baseImage để tiết kiệm RAM, không dùng Clone()
+            baseImage.Mutate(x => x.Resize(new ResizeOptions
             {
                 Size = new Size(1600, 1600),
                 Mode = ResizeMode.Max
-            })))
-            {
-                await previewImage.SaveAsWebpAsync(previewStream, new WebpEncoder { Quality = 82 }, ct);
-            }
+            }));
+
+            using var previewStream = new MemoryStream();
+            await baseImage.SaveAsWebpAsync(previewStream, new WebpEncoder { Quality = 82 }, ct);
             previewStream.Position = 0;
 
             if (_storageService != null)
@@ -643,15 +650,15 @@ public sealed class PostService : IPostService
             }
 
             // 2b. Sinh Thumbnail sắc nét (600x600, Crop vuông cân đối, WebP Q80)
-            using var thumbnailStream = new MemoryStream();
-            using (var thumbImage = baseImage.Clone(x => x.Resize(new ResizeOptions
+            // Downscale tiếp từ baseImage (lúc này đã là <=1600px), không tốn RAM clone ảnh gốc
+            baseImage.Mutate(x => x.Resize(new ResizeOptions
             {
                 Size = new Size(600, 600),
                 Mode = ResizeMode.Crop
-            })))
-            {
-                await thumbImage.SaveAsWebpAsync(thumbnailStream, new WebpEncoder { Quality = 80 }, ct);
-            }
+            }));
+
+            using var thumbnailStream = new MemoryStream();
+            await baseImage.SaveAsWebpAsync(thumbnailStream, new WebpEncoder { Quality = 80 }, ct);
             thumbnailStream.Position = 0;
 
             if (_storageService != null)
@@ -668,8 +675,9 @@ public sealed class PostService : IPostService
                 thumbnailUrl = $"/uploads/thumbnail/{thumbFileName}";
             }
         }
-        catch (Exception) when (!ct.IsCancellationRequested)
+        catch (Exception ex) when (!ct.IsCancellationRequested)
         {
+            _logger.LogError(ex, "Lỗi xảy ra khi giải mã và tạo ảnh cho bài đăng: {File}", item.OriginalFileName);
             TryDelete(item.TempFilePath);
             return;
         }
@@ -770,9 +778,24 @@ public sealed class PostService : IPostService
             if (File.Exists(localDedicated)) return File.OpenRead(localDedicated);
         }
 
-        // Bài đăng cũ (chưa có bước lưu preview riêng) — resize tạm từ ảnh gốc
+        // Bài đăng cũ (gửi trước bước lưu preview riêng):
+        // Sinh 1 lần duy nhất từ ảnh gốc, có khoá Semaphore tuần tự (concurrency = 1) để an toàn với 512MB RAM.
+        // Sau khi sinh, lưu vào storage/local để các lần gọi tiếp theo đọc file sẵn có (đúng với header immutable 1 năm).
+        await _previewGenLock.WaitAsync(ct);
         try
         {
+            // Kiểm tra lại lần 2 sau khi nhận lock
+            if (_storageService != null)
+            {
+                var dedicatedStream = await _storageService.GetFileStreamAsync(webpPreviewPath, ct);
+                if (dedicatedStream != null) return dedicatedStream;
+            }
+            else
+            {
+                var localWebp = Path.Combine(_webRootPath, webpPreviewPath.TrimStart('/', '\\').Replace('/', Path.DirectorySeparatorChar));
+                if (File.Exists(localWebp)) return File.OpenRead(localWebp);
+            }
+
             Stream? originalStream = null;
             if (_storageService != null)
             {
@@ -784,27 +807,62 @@ public sealed class PostService : IPostService
                 if (File.Exists(localOriginal)) originalStream = File.OpenRead(localOriginal);
             }
 
-            if (originalStream == null) return null;
-
-            using (originalStream)
-            using (var image = await Image.LoadAsync(_imagePolicy.Configuration, originalStream, ct))
+            if (originalStream != null)
             {
-                image.Mutate(x => x.Resize(new ResizeOptions
-                {
-                    Size = new Size(1600, 1600),
-                    Mode = ResizeMode.Max
-                }));
+                s_legacyPreviewConfig ??= ImagePolicy.WithAllocationLimit(
+                    _imagePolicy.Configuration, poolSizeMb: 32, allocationLimitMb: 256);
 
-                var previewStream = new MemoryStream();
-                await image.SaveAsWebpAsync(previewStream, new WebpEncoder { Quality = 82 }, ct);
-                previewStream.Position = 0;
-                return previewStream;
+                using (originalStream)
+                using (var image = await Image.LoadAsync(s_legacyPreviewConfig, originalStream, ct))
+                {
+                    image.Mutate(x =>
+                    {
+                        x.AutoOrient();
+                        x.Resize(new ResizeOptions
+                        {
+                            Size = new Size(1600, 1600),
+                            Mode = ResizeMode.Max
+                        });
+                    });
+                    // Preview được phục vụ công khai: không mang theo GPS/EXIF của ảnh gốc.
+                    image.Metadata.ExifProfile = null;
+                    image.Metadata.XmpProfile = null;
+                    image.Metadata.IptcProfile = null;
+
+                    using var previewStream = new MemoryStream();
+                    await image.SaveAsWebpAsync(previewStream, new WebpEncoder { Quality = 82 }, ct);
+                    previewStream.Position = 0;
+
+                    if (_storageService != null)
+                    {
+                        await _storageService.SaveFileAsync(previewStream, webpPreviewPath, "image/webp", ct);
+                        return await _storageService.GetFileStreamAsync(webpPreviewPath, ct);
+                    }
+                    else
+                    {
+                        var localWebp = Path.Combine(_webRootPath, webpPreviewPath.TrimStart('/', '\\').Replace('/', Path.DirectorySeparatorChar));
+                        var dir = Path.GetDirectoryName(localWebp);
+                        if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+                        using (var fs = new FileStream(localWebp, FileMode.Create, FileAccess.Write, FileShare.None))
+                        {
+                            await previewStream.CopyToAsync(fs, ct);
+                        }
+                        return File.OpenRead(localWebp);
+                    }
+                }
             }
         }
-        catch (Exception) when (!ct.IsCancellationRequested)
+        catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            return null;
+            _logger.LogWarning(ex, "Lỗi khi tự động sinh preview cho bài đăng cũ {Id}", id);
         }
+        finally
+        {
+            _previewGenLock.Release();
+        }
+
+        // Nếu tạo preview thất bại thì mới fallback về thumbnail
+        return await GetThumbnailStreamAsync(id, ct);
     }
 
     public async Task<IReadOnlyDictionary<int, string>> GetOriginalPathsAsync(CancellationToken ct)

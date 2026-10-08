@@ -161,15 +161,32 @@ public sealed class MosaicLayoutService(IOptions<MosaicOptions> options) : IMosa
             byPriority = Stratify(byPriority);
 
         // rank theo thứ tự ưu tiên → ảnh thứ rank được gán vào ô đó.
+        var sortedById = orderedPosts.OrderBy(p => p.Id).ToList();
+        var idToAtlasSlot = new Dictionary<int, int>(sortedById.Count);
+        for (int s = 0; s < sortedById.Count; s++)
+        {
+            idToAtlasSlot[sortedById[s].Id] = s;
+        }
+
         var postIdByReadIndex = new int[tiles.Count];
         var rankByReadIndex = new int[tiles.Count];
+        var atlasSlotByReadIndex = new int[tiles.Count];
         Array.Fill(postIdByReadIndex, -1);
+        Array.Fill(atlasSlotByReadIndex, -1);
 
         for (int rank = 0; rank < byPriority.Count; rank++)
         {
             int readIndex = byPriority[rank].ReadIndex;
             rankByReadIndex[readIndex] = rank;
-            if (rank < orderedPosts.Count) postIdByReadIndex[readIndex] = orderedPosts[rank].Id;
+            if (rank < orderedPosts.Count)
+            {
+                int pid = orderedPosts[rank].Id;
+                postIdByReadIndex[readIndex] = pid;
+                if (idToAtlasSlot.TryGetValue(pid, out int slot))
+                {
+                    atlasSlotByReadIndex[readIndex] = slot;
+                }
+            }
         }
 
         var result = new List<MosaicTile>(tiles.Count);
@@ -181,7 +198,8 @@ public sealed class MosaicLayoutService(IOptions<MosaicOptions> options) : IMosa
                 Unit: t.Rect,
                 LetterId: raster.Glyphs[t.LetterIndex].Id,
                 PostId: postIdByReadIndex[i],
-                Rank: rankByReadIndex[i]));
+                Rank: rankByReadIndex[i],
+                AtlasSlot: atlasSlotByReadIndex[i]));
         }
         return result;
     }

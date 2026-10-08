@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   X,
@@ -81,9 +81,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [approvedSearch, setApprovedSearch] = useState('');
   const [realDurations, setRealDurations] = useState<Record<number, number>>({});
 
+  const loadedAudioIds = useRef<Set<number>>(new Set());
+
   useEffect(() => {
     podcasts.forEach((p) => {
-      if (p.audioUrl && !realDurations[p.id]) {
+      if (p.audioUrl && !loadedAudioIds.current.has(p.id)) {
+        loadedAudioIds.current.add(p.id);
         const audio = new Audio();
         audio.preload = 'metadata';
         audio.src = p.audioUrl;
@@ -97,7 +100,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         };
       }
     });
-  }, [podcasts, realDurations]);
+  }, [podcasts]);
 
   const handleTogglePinAction = async (id: number, currentPinned: boolean) => {
     if (!onTogglePin) return;

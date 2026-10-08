@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Sparkles, Plus, Settings, Heart, Calendar, MessageSquare, ChevronRight, X, Download, Music2, Tv, MapPin } from 'lucide-react';
 import { MosaicSkeleton } from './components/MosaicSkeleton';
@@ -135,6 +135,11 @@ function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [activePostDetail, setActivePostDetail] = useState<Post | null>(null);
   const [voteAnimKey, setVoteAnimKey] = useState(0);
+  // handleVote ổn định (deps rỗng) nên đọc bài đang mở qua ref, không qua closure.
+  const activePostIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    activePostIdRef.current = activePostDetail?.id ?? null;
+  }, [activePostDetail]);
 
   // Target Post for 3D locate
   const [targetPostId, setTargetPostId] = useState<number | null>(null);
@@ -173,8 +178,15 @@ function App() {
     prefetch: importGrid3D,
   });
 
-  // Tham chiếu ổn định để Grid3D không phải render lại theo mọi thay đổi state của App.
+  // Tham chiếu ổn định để Grid3D và MemoryWall không phải render lại theo mọi thay đổi state của App.
   const handleCellClick = useCallback((post: Post) => setActivePostDetail(post), []);
+  const handleCardClick = useCallback((post: Post) => setActivePostDetail(post), []);
+  const handleExportCard = useCallback((post: Post) => setExportPostCard(post), []);
+  const handleLocatePost = useCallback((post: Post) => {
+    setTargetPostId(post.id);
+    mosaicRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, []);
+  const handleClearTarget = useCallback(() => setTargetPostId(null), []);
 
   const fetchData = async () => {
     try {
@@ -250,15 +262,15 @@ function App() {
     }
   };
 
-  const handleVote = async (id: number) => {
+  const handleVote = useCallback(async (id: number) => {
     try {
       const res = await fetch(`/api/posts/${id}/vote`, { method: 'POST' });
       if (res.ok) {
         setApprovedPosts(prev =>
           prev.map(p => p.id === id ? { ...p, voteCount: p.voteCount + 1 } : p)
         );
-        if (activePostDetail && activePostDetail.id === id) {
-          setActivePostDetail(prev => prev ? { ...prev, voteCount: prev.voteCount + 1 } : null);
+        if (activePostIdRef.current === id) {
+          setActivePostDetail(prev => prev && prev.id === id ? { ...prev, voteCount: prev.voteCount + 1 } : prev);
           setVoteAnimKey(k => k + 1);
         }
         fireCelebration();
@@ -270,7 +282,7 @@ function App() {
     } catch {
       triggerToast('Không thể kết nối đến máy chủ.', 'error');
     }
-  };
+  }, []);
 
   const handleUploadSubmit = async (message: string, department: string, file: File): Promise<boolean> => {
     const formData = new FormData();
@@ -419,6 +431,16 @@ function App() {
     }
   };
 
+  const anyOverlayOpen = Boolean(
+    activePostDetail ||
+    isUploadModalOpen ||
+    exportPostCard ||
+    isBackdropViewerOpen ||
+    isStageModeOpen ||
+    isAdminPanelOpen ||
+    isPasswordModalOpen
+  );
+
   return (
     <div className="min-h-screen bg-brand-bg text-brand-textPrimary flex flex-col font-sans relative antialiased">
       {/* Mặt bàn soi phim: một lớp lưới kẻ tĩnh, thay cho ba khối gradient bị làm
@@ -550,7 +572,8 @@ function App() {
                     onCellClick={handleCellClick}
                     theme={theme}
                     targetPostId={targetPostId}
-                    onClearTarget={() => setTargetPostId(null)}
+                    onClearTarget={handleClearTarget}
+                    paused={anyOverlayOpen}
                   />
                 </Suspense>
               ) : (
@@ -696,12 +719,9 @@ function App() {
             <MemoryWall
               posts={approvedPosts}
               onVote={handleVote}
-              onCardClick={(post) => setActivePostDetail(post)}
-              onExportCard={(post) => setExportPostCard(post)}
-              onLocatePost={(post) => {
-                setTargetPostId(post.id);
-                mosaicRef.current?.scrollIntoView({ behavior: 'smooth' });
-              }}
+              onCardClick={handleCardClick}
+              onExportCard={handleExportCard}
+              onLocatePost={handleLocatePost}
               selectedDepartment={selectedDepartment}
             />
           </div>

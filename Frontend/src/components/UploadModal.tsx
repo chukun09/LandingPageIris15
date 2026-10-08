@@ -62,8 +62,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onSub
       return;
     }
 
-    if (selectedFile.size > 15 * 1024 * 1024) {
-      setErrorMsg('Kích thước ảnh vượt quá giới hạn 15MB. Vui lòng chọn ảnh nhỏ hơn.');
+    if (selectedFile.size > 50 * 1024 * 1024) {
+      setErrorMsg('Kích thước ảnh vượt quá giới hạn 50MB. Vui lòng chọn ảnh nhỏ hơn.');
       return;
     }
 
@@ -100,6 +100,11 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onSub
       if (resizeResult.isResized) {
         const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || 'photo';
         uploadFile = new File([resizeResult.blob], `${baseName}.jpg`, { type: 'image/jpeg' });
+      }
+
+      if (uploadFile.size > 15 * 1024 * 1024) {
+        setErrorMsg('Ảnh sau khi nén vẫn vượt quá giới hạn 15MB. Vui lòng chọn ảnh khác.');
+        return;
       }
 
       setStatusText('Đang gửi...');

@@ -112,6 +112,9 @@ async function renderToBlob(
       const offscreen = new OffscreenCanvas(width, height);
       const ctx = offscreen.getContext('2d');
       if (ctx) {
+        // Tô nền trắng trước khi vẽ để PNG trong suốt xuất sang JPEG không bị biến thành nền đen
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, width, height);
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(source, 0, 0, width, height);
@@ -132,6 +135,9 @@ async function renderToBlob(
       reject(new Error('Không thể khởi tạo 2D canvas context'));
       return;
     }
+    // Tô nền trắng trước khi vẽ để PNG trong suốt xuất sang JPEG không bị biến thành nền đen
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, width, height);
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(source, 0, 0, width, height);

@@ -33,6 +33,10 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 COPY --from=backend-build /app .
 
+# Cấu hình GC cho môi trường Render 512MB RAM: Workstation GC + GC Heap hard limit (320MB)
+ENV DOTNET_gcServer=0
+ENV DOTNET_GCHeapHardLimit=0x14000000
+
 # Thiết lập Render port binding động qua CMD shell
 EXPOSE 80
 CMD ["sh", "-c", "dotnet LandingPageEvent.dll --urls http://0.0.0.0:${PORT:-80}"]

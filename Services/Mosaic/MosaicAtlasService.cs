@@ -74,11 +74,10 @@ public sealed class MosaicAtlasService(
 
         var posts = await postService.GetMosaicPostRefsAsync(ct);
 
-        // Cùng thứ tự với MosaicLayoutService để slot atlas trùng với rank của ô.
+        // Sắp xếp cố định theo Id để slot atlas không bị thay đổi mỗi khi có người vote.
+        // Nhờ đó, Atlas texture được cache vĩnh viễn trên CDN/trình duyệt và không cần rebuild trong RAM!
         var ordered = posts
-            .OrderByDescending(p => p.VoteCount)
-            .ThenBy(p => p.CreatedAt)
-            .ThenBy(p => p.Id)
+            .OrderBy(p => p.Id)
             .ToList();
 
         var key = BuildKey(tileSize, ordered);

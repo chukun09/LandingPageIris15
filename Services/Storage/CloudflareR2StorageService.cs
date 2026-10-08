@@ -64,7 +64,9 @@ public sealed class CloudflareR2StorageService : IStorageService, IDisposable
             throw new ArgumentNullException(nameof(stream));
         }
 
-        var normalizedKey = relativePath.Replace('\\', '/').TrimStart('/');
+        // Dùng ExtractKey để nhận cả URL đầy đủ ({PublicUrl}/uploads/...) như đường dẫn
+        // lưu trong DB, không thì key trên R2 sẽ mang nguyên tiền tố "https://...".
+        var normalizedKey = ExtractKey(relativePath);
 
         // 1. Nếu cấu hình Cloudflare R2, đẩy trực tiếp lên Cloudflare R2 Bucket (HOÀN TOÀN KHÔNG LƯU VÀO DISK VẬT LÝ)
         if (_isR2Configured && _s3Client != null)
@@ -142,7 +144,7 @@ public sealed class CloudflareR2StorageService : IStorageService, IDisposable
             return File.OpenRead(localPath);
         }
 
-        // 2. Nếu cấu hình R2, tải luồng stream từ Cloudflare R2 Bucket
+        // 2. Nếu cấu hình R2, tải luồng stream từ Cloudflare R2 Bucket và lưu cache đĩa cục bộ
         if (_isR2Configured && _s3Client != null)
         {
             try
@@ -154,10 +156,42 @@ public sealed class CloudflareR2StorageService : IStorageService, IDisposable
                 };
 
                 using var response = await _s3Client.GetObjectAsync(getRequest, ct);
-                var memoryStream = new MemoryStream();
-                await response.ResponseStream.CopyToAsync(memoryStream, ct);
-                memoryStream.Position = 0;
-                return memoryStream;
+
+                // Stream trực tiếp xuống đĩa cục bộ (disk cache) theo chunk 80KB để không tốn RAM heap.
+                // Các request sau sẽ đọc trực tiếp từ đĩa với FileStream (0 MB RAM).
+                var dir = Path.GetDirectoryName(localPath);
+                if (!string.IsNullOrEmpty(dir))
+                {
+                    Directory.CreateDirectory(dir);
+                }
+
+                var tempPath = localPath + $".tmp.{Guid.NewGuid():N}";
+                try
+                {
+                    using (var fs = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true))
+                    {
+                        await response.ResponseStream.CopyToAsync(fs, ct);
+                    }
+
+                    File.Move(tempPath, localPath, overwrite: true);
+                    return new FileStream(localPath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
+                }
+                catch (IOException) when (File.Exists(localPath))
+                {
+                    // Trường hợp request đồng thời khác đã ghi xong file
+                    if (File.Exists(tempPath))
+                    {
+                        try { File.Delete(tempPath); } catch { /* ignore */ }
+                    }
+                    return new FileStream(localPath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
+                }
+                finally
+                {
+                    if (File.Exists(tempPath))
+                    {
+                        try { File.Delete(tempPath); } catch { /* ignore */ }
+                    }
+                }
             }
             catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
             {

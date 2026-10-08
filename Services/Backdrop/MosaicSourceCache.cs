@@ -41,6 +41,10 @@ public sealed class MosaicSourceCache(
     Storage.IStorageService? storageService = null) : IMosaicSourceCache
 {
     private readonly BackdropOptions _o = options.Value;
+    private readonly SixLabors.ImageSharp.Configuration _backdropConfig = ImagePolicy.WithAllocationLimit(
+        imagePolicy.Configuration,
+        Math.Max(options.Value.PoolSizeLimitMb, 64),
+        Math.Max(options.Value.AllocationLimitMb, 256));
 
     private string WebRoot => environment.WebRootPath
                               ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
@@ -74,7 +78,7 @@ public sealed class MosaicSourceCache(
                 {
                     // Image.Identify chỉ đọc header — vài chục micro giây mỗi file,
                     // nên không cần lưu kích thước vào cơ sở dữ liệu.
-                    var info = await Image.IdentifyAsync(imagePolicy.Configuration, stream, ct);
+                    var info = await Image.IdentifyAsync(_backdropConfig, stream, ct);
                     if (info is null) continue;
                     result[postId] = new SourceImageInfo(postId, relative, info.Width, info.Height);
                 }
@@ -115,7 +119,7 @@ public sealed class MosaicSourceCache(
         try
         {
             using (stream)
-            using (var image = await Image.LoadAsync<Rgb24>(imagePolicy.Configuration, stream, ct))
+            using (var image = await Image.LoadAsync<Rgb24>(_backdropConfig, stream, ct))
             {
                 image.Mutate(x =>
                 {

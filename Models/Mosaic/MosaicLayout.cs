@@ -35,7 +35,8 @@ public sealed record MosaicTile(
     LatticeRect Unit,
     string LetterId,
     int PostId,
-    int Rank)
+    int Rank,
+    int AtlasSlot = -1)
 {
     public int AreaUnits => Unit.Area;
 }

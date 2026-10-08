@@ -48,8 +48,8 @@ public interface IImagePolicy
 /// </summary>
 public sealed class ImagePolicy : IImagePolicy
 {
-    /// <summary>Trần số điểm ảnh mặc định (~50 MP). Ảnh điện thoại 12 MP nằm rất xa ngưỡng này.</summary>
-    public const long DefaultMaxPixels = 50_000_000;
+    /// <summary>Trần số điểm ảnh mặc định (~25 MP). Ảnh điện thoại 12 MP - 24 MP nằm trong ngưỡng này, tránh tràn RAM 512MB.</summary>
+    public const long DefaultMaxPixels = 25_000_000;
 
     private readonly long _maxPixels;
 
@@ -76,8 +76,34 @@ public sealed class ImagePolicy : IImagePolicy
             new JpegConfigurationModule(),
             new WebpConfigurationModule());
 
+        // Giới hạn bộ nhớ đệm cho SixLabors.ImageSharp để không chiếm quá nhiều RAM trên Render (512MB)
+        configuration.MemoryAllocator = SixLabors.ImageSharp.Memory.MemoryAllocator.Create(
+            new SixLabors.ImageSharp.Memory.MemoryAllocatorOptions
+            {
+                MaximumPoolSizeMegabytes = 32,
+                AllocationLimitMegabytes = 128
+            });
+
         // Xử lý ảnh không được chiếm hết CPU của tiến trình web.
         configuration.MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount / 2);
+        return configuration;
+    }
+
+    /// <summary>
+    /// Bản sao cấu hình hạn chế (chỉ PNG/JPEG/WebP) với trần cấp phát riêng. Dành cho
+    /// các tác vụ chạy tuần tự phải giải mã ảnh gốc nhận từ trước khi hạ trần xuống
+    /// 25 MP — ảnh 50 MP dạng Rgb24 cần ~150 MB, vượt trần 128 MB của luồng upload.
+    /// </summary>
+    public static ImageSharpConfiguration WithAllocationLimit(
+        ImageSharpConfiguration source, int poolSizeMb, int allocationLimitMb)
+    {
+        var configuration = source.Clone();
+        configuration.MemoryAllocator = SixLabors.ImageSharp.Memory.MemoryAllocator.Create(
+            new SixLabors.ImageSharp.Memory.MemoryAllocatorOptions
+            {
+                MaximumPoolSizeMegabytes = poolSizeMb,
+                AllocationLimitMegabytes = allocationLimitMb
+            });
         return configuration;
     }
 

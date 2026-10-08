@@ -13,7 +13,11 @@ export function usePerfTier(): PerfTier {
     const cores = navigator.hardwareConcurrency ?? 4;
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    const low = (isCoarse && dpr > 2) || cores <= 4;
+    const nav = typeof navigator !== 'undefined' ? (navigator as { deviceMemory?: number; connection?: { saveData?: boolean } }) : {};
+    const mem = nav.deviceMemory ?? 8;
+    const saveData = Boolean(nav.connection?.saveData);
+
+    const low = (isCoarse && dpr > 2) || cores <= 4 || mem <= 4 || saveData;
 
     return { tier: low ? 'low' : 'high', reducedMotion, isCoarse };
   }, []);

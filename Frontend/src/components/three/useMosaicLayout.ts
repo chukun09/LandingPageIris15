@@ -80,7 +80,7 @@ function toGeometry(layout: MosaicLayoutResponse): MosaicGeometry {
     if (d > maxDist) maxDist = d;
 
     jitter[i] = rand() * 0.15;
-    slot[i] = t.postId >= 0 ? t.rank : -1;
+    slot[i] = t.postId >= 0 ? (typeof t.atlasSlot === 'number' && t.atlasSlot >= 0 ? t.atlasSlot : t.rank) : -1;
     sheetIndex[i] = t.rank;
     gold[i] = tintById.get(t.letterId) === 'gold' ? 1 : 0;
     postId[i] = t.postId;

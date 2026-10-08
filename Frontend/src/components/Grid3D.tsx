@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
@@ -10,7 +10,7 @@ import { MosaicMesh } from './three/MosaicMesh';
 import { GRID3D_THEMES } from './three/themeConfig';
 import type { Grid3DTheme } from './three/themeConfig';
 import { useMosaicLayout } from './three/useMosaicLayout';
-import { dprForBudget, useCanvasActivity } from './three/useCanvasActivity';
+import { dprForBudget, useCanvasFrameloop, useInvalidateOnResume } from './three/useCanvasActivity';
 import { usePerfTier } from '../hooks/usePerfTier';
 import type { MosaicGeometry } from '../types/mosaic';
 
@@ -32,6 +32,7 @@ interface Grid3DProps {
   theme: Grid3DTheme;
   targetPostId?: number | null;
   onClearTarget?: () => void;
+  paused?: boolean;
 }
 
 class CanvasErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
@@ -77,7 +78,7 @@ function Scene({
   const lowTier = tier === 'low';
   const cfg = GRID3D_THEMES[theme];
 
-  useCanvasActivity(reducedMotion ? 'demand' : 'always');
+  useInvalidateOnResume();
 
   // alpha là thuộc tính ngữ cảnh WebGL, bất biến sau khi tạo — nên nền phải đổi
   // bằng clearColor. Cách cũ đặt alpha theo theme và bị nền đen khi sang light.
@@ -175,20 +176,50 @@ function Placeholder({ label }: { label: string }) {
   );
 }
 
-export const Grid3D = ({
+export const Grid3D = React.memo(({
   approvedPosts,
   onCellClick,
   theme,
   targetPostId,
   onClearTarget,
+  paused,
 }: Grid3DProps) => {
   const [exhibitionMode, setExhibitionMode] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [autoRotate, setAutoRotate] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const placeholderRef = useRef<HTMLDivElement | null>(null);
+
+  if (!hostRef.current && typeof document !== 'undefined') {
+    hostRef.current = document.createElement('div');
+  }
+
+  useEffect(() => {
+    const host = hostRef.current;
+    return () => {
+      if (host && host.parentNode) {
+        host.parentNode.removeChild(host);
+      }
+    };
+  }, []);
+
+  // Layout effect: gắn host trước khi trình duyệt vẽ, tránh một khung hình trống
+  // lúc mount và lúc bật/tắt toàn màn hình.
+  useLayoutEffect(() => {
+    const host = hostRef.current;
+    const placeholder = placeholderRef.current;
+    if (!host) return;
+
+    if (isFullscreen) {
+      document.body.appendChild(host);
+    } else if (placeholder) {
+      placeholder.appendChild(host);
+    }
+  }, [isFullscreen]);
 
   const { geometry, error, loading } = useMosaicLayout();
-  const { tier } = usePerfTier();
+  const { tier, reducedMotion } = usePerfTier();
 
   const postsById = useMemo(() => new Map(approvedPosts.map((p) => [p.id, p])), [approvedPosts]);
 
@@ -248,6 +279,7 @@ export const Grid3D = ({
   }, []);
 
   const maxDpr = dprForBudget(viewport.width, viewport.height, tier === 'low');
+  const frameloop = useCanvasFrameloop(containerRef, reducedMotion ? 'demand' : 'always', Boolean(paused));
 
   const shell = isFullscreen
     ? 'fixed inset-0 w-screen h-screen z-50 bg-brand-bg/98 backdrop-blur-lg flex flex-col p-4'
@@ -290,6 +322,7 @@ export const Grid3D = ({
           {geometry && (
             <Canvas
               orthographic
+              frameloop={frameloop}
               camera={{ position: [0, geometry.rows * 0.15, geometry.cols], near: 0.1, far: geometry.cols * 6 }}
               // alpha luôn bật; nền do clearColor quyết định theo theme.
               gl={{ alpha: true, antialias: tier === 'low', powerPreference: 'high-performance', stencil: false }}
@@ -363,9 +396,11 @@ export const Grid3D = ({
     </div>
   );
 
-  // Khi toàn màn hình, render qua portal thẳng vào body để thoát khỏi mọi
-  // ancestor motion.div có transform (fadeUp...) — transform tạo containing
-  // block mới khiến position:fixed bị giới hạn trong section thay vì viewport,
-  // làm nút X (Minimize2) bị trôi ra ngoài tầm nhìn khi cuộn trang.
-  return isFullscreen ? createPortal(content, document.body) : content;
-};
+  // Luôn render qua portal vào hostRef cố định để không bao giờ huỷ WebGL Context khi bật/tắt toàn màn hình.
+  // Khi bật toàn màn hình, chỉ di chuyển hostRef trong DOM sang document.body thay vì remount cây React.
+  return (
+    <div ref={placeholderRef} className="w-full relative">
+      {hostRef.current ? createPortal(content, hostRef.current) : null}
+    </div>
+  );
+});

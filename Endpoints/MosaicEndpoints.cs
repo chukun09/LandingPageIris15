@@ -134,7 +134,8 @@ public static class MosaicEndpoints
                 ],
                 LetterId: t.LetterId,
                 PostId: t.PostId,
-                Rank: t.Rank));
+                Rank: t.Rank,
+                AtlasSlot: t.AtlasSlot));
         }
 
         return new MosaicLayoutResponse(
