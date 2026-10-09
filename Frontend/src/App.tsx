@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Sparkles, Plus, Settings, Heart, Calendar, MessageSquare, ChevronRight, X, Download, Music2, Tv, MapPin } from 'lucide-react';
+import { Sparkles, Plus, Settings, Heart, Calendar, MessageSquare, ChevronRight, X, Download, Music2, Tv, MapPin, Maximize2 } from 'lucide-react';
 import { MosaicSkeleton } from './components/MosaicSkeleton';
 import { useLazyOnVisible } from './hooks/useLazyOnVisible';
 import { PodcastPlayer } from './components/PodcastPlayer';
@@ -65,60 +65,111 @@ function DetailImagePreview({
 }) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [isZoomed, setIsZoomed] = useState(false);
 
   useEffect(() => {
     setIsLoaded(false);
     setHasError(false);
+    setIsZoomed(false);
   }, [previewUrl]);
 
   if (hasError) {
     return (
-      <div className="w-full aspect-video bg-brand-surface border border-brand-border/60 rounded-2xl flex items-center justify-center text-xs text-brand-textMuted mt-4">
+      <div className="w-full shrink-0 h-64 sm:h-72 bg-brand-surface border border-brand-border/60 rounded-2xl flex items-center justify-center text-xs text-brand-textMuted mt-1">
         Không thể hiển thị ảnh
       </div>
     );
   }
 
   return (
-    <div className="w-full aspect-video max-h-[360px] bg-slate-950/80 border border-brand-border/60 dark:border-brand-secondary/20 rounded-2xl overflow-hidden mt-4 shadow-md relative flex items-center justify-center">
-      {/* Lớp nền mờ Ambient cho mọi tỉ lệ ảnh */}
-      {thumbnailUrl && (
+    <>
+      <div className="w-full shrink-0 h-[280px] sm:h-[340px] md:h-[380px] bg-slate-950/80 border border-brand-border/60 dark:border-brand-secondary/20 rounded-2xl overflow-hidden shadow-md relative flex items-center justify-center group select-none">
+        {/* Lớp nền mờ Ambient cho mọi tỉ lệ ảnh */}
+        {thumbnailUrl && (
+          <img
+            src={thumbnailUrl}
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover blur-2xl opacity-40 scale-125 pointer-events-none"
+            decoding="async"
+          />
+        )}
+
+        {/* Hiển thị ngay thumbnail mờ trong lúc chờ nạp ảnh HD */}
+        {!isLoaded && thumbnailUrl && (
+          <img
+            src={thumbnailUrl}
+            alt=""
+            className="w-full h-full object-contain filter blur-sm scale-100 transition-opacity duration-300 relative z-10"
+          />
+        )}
+
+        {/* Ảnh HD xem trước chất lượng cao */}
         <img
-          src={thumbnailUrl}
-          alt=""
-          className="absolute inset-0 w-full h-full object-cover blur-xl opacity-35 scale-125 pointer-events-none"
+          src={previewUrl}
+          alt={alt}
+          className={`w-full h-full object-contain relative z-20 transition-opacity duration-500 cursor-zoom-in ${
+            isLoaded ? 'opacity-100' : 'opacity-0'
+          }`}
           decoding="async"
+          onLoad={() => setIsLoaded(true)}
+          onError={() => setHasError(true)}
+          onClick={() => isLoaded && setIsZoomed(true)}
+          title="Nhấp để phóng to toàn màn hình"
         />
-      )}
 
-      {/* Hiển thị ngay thumbnail mờ trong lúc chờ nạp ảnh HD */}
-      {!isLoaded && thumbnailUrl && (
-        <img
-          src={thumbnailUrl}
-          alt=""
-          className="w-full h-full object-contain filter blur-sm scale-100 transition-opacity duration-300 relative z-10"
-        />
-      )}
+        {/* Nút bấm phóng to ảnh toàn màn hình */}
+        {isLoaded && (
+          <button
+            type="button"
+            onClick={() => setIsZoomed(true)}
+            className="absolute bottom-3 right-3 z-30 p-2 rounded-xl bg-black/60 hover:bg-black/80 text-white backdrop-blur-md opacity-0 group-hover:opacity-100 transition-all duration-200 flex items-center gap-1.5 text-xs font-semibold shadow-lg"
+            title="Xem ảnh gốc toàn màn hình"
+          >
+            <Maximize2 className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Phóng to</span>
+          </button>
+        )}
 
-      {/* Ảnh HD xem trước chất lượng cao */}
-      <img
-        src={previewUrl}
-        alt={alt}
-        className={`w-full h-full object-contain relative z-20 transition-opacity duration-500 ${
-          isLoaded ? 'opacity-100' : 'opacity-0'
-        }`}
-        decoding="async"
-        onLoad={() => setIsLoaded(true)}
-        onError={() => setHasError(true)}
-      />
+        {/* Vòng quay nhẹ nhàng khi chưa có bất kỳ ảnh nào */}
+        {!isLoaded && !thumbnailUrl && (
+          <div className="absolute inset-0 flex items-center justify-center bg-brand-surface animate-pulse">
+            <div className="w-6 h-6 border-2 border-brand-secondary border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
+      </div>
 
-      {/* Vòng quay nhẹ nhàng khi chưa có bất kỳ ảnh nào */}
-      {!isLoaded && !thumbnailUrl && (
-        <div className="absolute inset-0 flex items-center justify-center bg-brand-surface animate-pulse">
-          <div className="w-6 h-6 border-2 border-brand-secondary border-t-transparent rounded-full animate-spin" />
-        </div>
-      )}
-    </div>
+      {/* Lightbox Modal phóng to ảnh toàn màn hình */}
+      <AnimatePresence>
+        {isZoomed && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[99999] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 cursor-zoom-out"
+            onClick={() => setIsZoomed(false)}
+          >
+            <button
+              type="button"
+              onClick={() => setIsZoomed(false)}
+              className="absolute top-5 right-5 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors z-10"
+              title="Đóng"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <motion.img
+              initial={{ scale: 0.92, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.92, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              src={previewUrl}
+              alt={alt}
+              className="max-w-[95vw] max-h-[92vh] object-contain rounded-xl shadow-2xl pointer-events-auto"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 
@@ -764,7 +815,7 @@ function App() {
       <ModalShell
         isOpen={!!activePostDetail}
         onClose={() => setActivePostDetail(null)}
-        maxWidth="max-w-lg"
+        maxWidth="max-w-xl md:max-w-2xl"
       >
         {activePostDetail && (
           <div className="p-6 flex flex-col gap-4 max-h-[90vh] overflow-y-auto custom-scrollbar relative">
@@ -783,7 +834,7 @@ function App() {
             />
 
             {/* Modern quote layout */}
-            <div className="bg-brand-surface/40 border border-brand-border/60 rounded-2xl p-5 relative select-none">
+            <div className="bg-brand-surface/40 border border-brand-border/60 rounded-2xl p-5 relative select-none shrink-0 max-h-56 sm:max-h-64 overflow-y-auto custom-scrollbar">
               <span className="absolute -top-3 -left-1 text-5xl text-brand-secondary/20 font-serif">“</span>
               <p className="text-xs md:text-sm text-brand-textPrimary leading-relaxed whitespace-pre-line italic relative z-10 pl-2">
                 {activePostDetail.message}
@@ -791,7 +842,7 @@ function App() {
             </div>
 
             {/* Metadata and action buttons */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 mt-2 border-t border-brand-border/60">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 mt-2 border-t border-brand-border/60 shrink-0">
               <div className="flex flex-col items-start gap-1">
                 <span className="inline-block text-[10px] font-bold px-2.5 py-0.5 rounded-md bg-brand-primary/10 text-brand-primary dark:bg-brand-secondary/15 dark:text-brand-secondary">
                   {activePostDetail.department || 'Ẩn danh'}
