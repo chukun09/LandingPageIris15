@@ -35,7 +35,7 @@ const MemoryWallComponent: React.FC<MemoryWallProps> = ({
   const [search, setSearch] = useState('');
   const deferredSearch = useDeferredValue(search);
   const [deptFilter, setDeptFilter] = useState(selectedDepartment || 'All');
-  const [sortBy, setSortBy] = useState<'votes' | 'date'>('votes');
+  const [sortBy, setSortBy] = useState<'votes' | 'date'>('date');
   const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
