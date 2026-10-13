@@ -72,6 +72,32 @@ public static class AdminEndpoints
         .WithSummary("Duyệt hoặc từ chối bài viết")
         .WithDescription("Nếu duyệt = true, bài viết xuất hiện trên Mosaic. Nếu duyệt = false, xóa bài viết khỏi CSDL và file vật lý.");
 
+        // 1b. Sửa nội dung bài viết chưa duyệt
+        protectedGroup.MapPut("/posts/{id:int}", async Task<Results<Ok<string>, NotFound, ValidationProblem>> (
+            int id,
+            [FromBody] EditPostRequest request,
+            IPostService postService,
+            CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(request.Message))
+            {
+                return TypedResults.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["Message"] = ["Nội dung chia sẻ là bắt buộc."]
+                });
+            }
+
+            var success = await postService.EditPendingPostAsync(id, request.Message, request.Department, ct);
+            if (!success)
+            {
+                return TypedResults.NotFound();
+            }
+            return TypedResults.Ok($"Đã cập nhật bài viết ID {id} thành công.");
+        })
+        .WithName("EditPendingPost")
+        .WithSummary("Sửa nội dung bài viết chưa duyệt")
+        .WithDescription("Cho phép ban tổ chức chỉnh sửa lời chúc/phòng ban của bài viết đang chờ duyệt trước khi phê duyệt.");
+
         // 2b. Ghim hoặc bỏ ghim bài viết lên đầu
         protectedGroup.MapPost("/posts/{id:int}/pin", async Task<Results<Ok<string>, NotFound>> (
             int id,

@@ -501,6 +501,20 @@ public sealed class PostService : IPostService
             .ToListAsync(ct);
     }
 
+    public async Task<bool> EditPendingPostAsync(int id, string message, string? department, CancellationToken ct)
+    {
+        // Chỉ cho phép BTC sửa bài CHƯA duyệt, tránh ảnh hưởng dữ liệu đã hiển thị công khai trên Mosaic.
+        var post = await _context.MemoryPosts
+            .Where(p => p.Id == id && !p.IsApproved)
+            .FirstOrDefaultAsync(ct);
+        if (post == null) return false;
+
+        post.Message = message;
+        post.Department = department;
+        await _context.SaveChangesAsync(ct);
+        return true;
+    }
+
     public async Task<bool> ApprovePostAsync(int id, bool approve, CancellationToken ct)
     {
         var post = await _context.MemoryPosts.FindAsync(new object[] { id }, ct);

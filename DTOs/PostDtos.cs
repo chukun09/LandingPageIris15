@@ -23,6 +23,19 @@ public sealed record CreatePostRequest
 }
 
 /// <summary>
+/// Yêu cầu sửa nội dung bài viết chưa duyệt (dành cho ban tổ chức).
+/// </summary>
+public sealed record EditPostRequest
+{
+    [Required(ErrorMessage = "Nội dung chia sẻ là bắt buộc.")]
+    [MaxLength(2000, ErrorMessage = "Nội dung chia sẻ không được vượt quá 2000 ký tự.")]
+    public required string Message { get; init; }
+
+    [MaxLength(100, ErrorMessage = "Tên phòng ban không được vượt quá 100 ký tự.")]
+    public string? Department { get; init; }
+}
+
+/// <summary>
 /// Phản hồi thông tin bài viết kỷ niệm hiển thị trên Bức tường ký ức.
 /// </summary>
 public sealed record PostResponse(

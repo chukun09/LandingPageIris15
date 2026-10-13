@@ -16,6 +16,7 @@ import {
   ExternalLink,
   CheckCheck,
   Maximize2,
+  Pencil,
 } from 'lucide-react';
 import { ModalShell } from './ModalShell';
 import { PodcastStudioTab } from './PodcastStudioTab';
@@ -51,6 +52,7 @@ interface AdminPanelProps {
   podcasts: Podcast[];
   onApprove: (id: number, approve: boolean) => Promise<void>;
   onApproveAll?: () => Promise<void>;
+  onEditPost?: (id: number, message: string, department: string) => Promise<void>;
   onTogglePin?: (id: number, isPinned?: boolean) => Promise<void>;
   onGeneratePodcast: (id: number, title: string, apiKey: string, region: string) => Promise<void>;
   onUploadPodcast: (formData: FormData) => Promise<void>;
@@ -72,6 +74,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   podcasts,
   onApprove,
   onApproveAll,
+  onEditPost,
   onTogglePin,
   onGeneratePodcast,
   onUploadPodcast,
@@ -92,6 +95,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [realDurations, setRealDurations] = useState<Record<number, number>>({});
   const [previewPost, setPreviewPost] = useState<PendingPost | null>(null);
   const [isApprovingAll, setIsApprovingAll] = useState(false);
+  const [editingPost, setEditingPost] = useState<PendingPost | null>(null);
+  const [editMessage, setEditMessage] = useState('');
+  const [editDepartment, setEditDepartment] = useState('');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   const loadedAudioIds = useRef<Set<number>>(new Set());
 
@@ -173,6 +180,29 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       alert('Thao tác phê duyệt thất bại.');
     } finally {
       setLoadingPosts((prev) => ({ ...prev, [id]: false }));
+    }
+  };
+
+  const handleStartEdit = (post: PendingPost) => {
+    setEditingPost(post);
+    setEditMessage(post.message);
+    setEditDepartment(post.department || '');
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingPost || !onEditPost) return;
+    if (!editMessage.trim()) {
+      alert('Nội dung chia sẻ không được để trống.');
+      return;
+    }
+    setIsSavingEdit(true);
+    try {
+      await onEditPost(editingPost.id, editMessage, editDepartment);
+      setEditingPost(null);
+    } catch {
+      alert('Cập nhật bài viết thất bại.');
+    } finally {
+      setIsSavingEdit(false);
     }
   };
 
@@ -453,6 +483,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                 </td>
                                 <td className="p-3.5 w-36 min-w-[140px] text-center align-top whitespace-nowrap">
                                   <div className="flex items-center justify-center gap-2 whitespace-nowrap">
+                                    {onEditPost && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleStartEdit(post)}
+                                        disabled={loadingPosts[post.id]}
+                                        className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-brand-secondary/15 hover:bg-brand-secondary hover:text-white border border-brand-secondary/30 text-brand-secondary rounded-lg font-bold text-xs whitespace-nowrap shrink-0 transition-all"
+                                        title="Sửa nội dung bài viết"
+                                      >
+                                        <Pencil className="w-3.5 h-3.5 shrink-0" />
+                                        <span>Sửa</span>
+                                      </button>
+                                    )}
                                     <button
                                       type="button"
                                       onClick={() => handleApproveAction(post.id, true)}
@@ -990,6 +1032,64 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </motion.div>
         )}
       </AnimatePresence>
+
+      <ModalShell isOpen={!!editingPost} onClose={() => setEditingPost(null)} maxWidth="max-w-lg">
+        {editingPost && (
+          <div className="flex flex-col">
+            <div className="p-6 border-b border-brand-border flex items-center justify-between">
+              <h3 className="text-lg font-black text-brand-textPrimary flex items-center gap-2">
+                <Pencil className="w-5 h-5 text-brand-secondary" /> Sửa bài viết chưa duyệt
+              </h3>
+              <button
+                onClick={() => setEditingPost(null)}
+                className="p-1 rounded-full text-brand-textMuted hover:text-brand-textPrimary hover:bg-brand-surfaceHover transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-brand-textSecondary">Phòng ban / Bộ phận</label>
+                <input
+                  type="text"
+                  value={editDepartment}
+                  onChange={(e) => setEditDepartment(e.target.value)}
+                  className="input-themed w-full px-4 py-2.5 text-sm bg-brand-surface text-brand-textPrimary"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-brand-textSecondary">Lời chúc / Kỷ niệm</label>
+                <textarea
+                  rows={5}
+                  value={editMessage}
+                  onChange={(e) => setEditMessage(e.target.value)}
+                  className="input-themed w-full px-4 py-2.5 text-sm resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="border-t border-brand-border p-4 flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setEditingPost(null)}
+                disabled={isSavingEdit}
+                className="px-4 py-2 border border-brand-border text-brand-textSecondary hover:bg-brand-surface font-bold rounded-xl text-xs transition-all active:scale-95 disabled:opacity-50"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveEdit}
+                disabled={isSavingEdit}
+                className="btn-gold px-5 py-2.5 text-xs disabled:opacity-70"
+              >
+                {isSavingEdit ? 'Đang lưu...' : 'Lưu thay đổi'}
+              </button>
+            </div>
+          </div>
+        )}
+      </ModalShell>
     </>
   );
 };

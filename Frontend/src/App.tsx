@@ -385,6 +385,28 @@ function App() {
     }
   };
 
+  const handleEditPost = async (id: number, message: string, department: string) => {
+    try {
+      const res = await fetch(`/api/admin/posts/${id}`, {
+        method: 'PUT',
+        headers: getAdminHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ message, department }),
+      });
+      if (res.status === 401) {
+        handleAuthExpired();
+        return;
+      }
+      if (res.ok) {
+        triggerToast('Đã cập nhật bài viết thành công!', 'success');
+        await fetchPending();
+      } else {
+        triggerToast('Cập nhật bài viết thất bại.', 'error');
+      }
+    } catch {
+      triggerToast('Lỗi mạng kết nối.', 'error');
+    }
+  };
+
   const handleApproveAllPosts = async () => {
     try {
       const res = await fetch('/api/admin/posts/approve-all', {
@@ -922,6 +944,7 @@ function App() {
             onAuthExpired={handleAuthExpired}
             onApprove={handleApprovePost}
             onApproveAll={handleApproveAllPosts}
+            onEditPost={handleEditPost}
             onTogglePin={handleTogglePin}
             onGeneratePodcast={handleGeneratePodcast}
             onUploadPodcast={handleUploadPodcast}
