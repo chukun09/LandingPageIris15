@@ -21,6 +21,7 @@ import {
 import { ModalShell } from './ModalShell';
 import { PodcastStudioTab } from './PodcastStudioTab';
 import { MosaicStudioTab } from './MosaicStudioTab';
+import { DEPARTMENTS } from '../constants/departments';
 
 interface PendingPost {
   id: number;
@@ -195,9 +196,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       alert('Nội dung chia sẻ không được để trống.');
       return;
     }
+    if (!editDepartment.trim()) {
+      alert('Vui lòng chọn phòng ban / bộ phận.');
+      return;
+    }
     setIsSavingEdit(true);
     try {
-      await onEditPost(editingPost.id, editMessage, editDepartment);
+      await onEditPost(editingPost.id, editMessage.trim(), editDepartment.trim());
       setEditingPost(null);
     } catch {
       alert('Cập nhật bài viết thất bại.');
@@ -1050,13 +1055,31 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
             <div className="p-6 space-y-4">
               <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-brand-textSecondary">Phòng ban / Bộ phận</label>
-                <input
-                  type="text"
-                  value={editDepartment}
-                  onChange={(e) => setEditDepartment(e.target.value)}
-                  className="input-themed w-full px-4 py-2.5 text-sm bg-brand-surface text-brand-textPrimary"
-                />
+                <label className="block text-xs font-bold text-brand-textSecondary">Phòng Ban / Bộ Phận *</label>
+                <div className="relative">
+                  <select
+                    value={editDepartment}
+                    onChange={(e) => setEditDepartment(e.target.value)}
+                    className="input-themed w-full px-4 py-2.5 text-sm cursor-pointer bg-brand-surface text-brand-textPrimary appearance-none pr-10"
+                    required
+                  >
+                    <option value="" disabled hidden>-- Chọn phòng ban / bộ phận --</option>
+                    {/* Fallback nếu bài viết có giá trị phòng ban tùy chỉnh ngoài danh sách chuẩn */}
+                    {editDepartment && !(DEPARTMENTS as readonly string[]).includes(editDepartment) && (
+                      <option value={editDepartment}>{editDepartment}</option>
+                    )}
+                    {DEPARTMENTS.map((dept) => (
+                      <option key={dept} value={dept}>
+                        {dept}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-brand-textSecondary">
+                    <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                      <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                    </svg>
+                  </div>
+                </div>
               </div>
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold text-brand-textSecondary">Lời chúc / Kỷ niệm</label>

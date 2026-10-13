@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { X, UploadCloud, AlertCircle, Sparkles } from 'lucide-react';
 import { ModalShell } from './ModalShell';
 import { resizeImageForUpload } from '../lib/resizeImage';
+import { DEPARTMENTS } from '../constants/departments';
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -161,18 +162,11 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, onSub
                 required
               >
                 <option value="" disabled hidden>-- Chọn phòng ban / bộ phận --</option>
-                <option value="Hội đồng Quản trị">Hội đồng Quản trị</option>
-                <option value="Ban Tổng Giám đốc">Ban Tổng Giám đốc</option>
-                <option value="Phòng Kỹ thuật Vận hành">Phòng Kỹ thuật Vận hành</option>
-                <option value="Phòng Phát triển Phần mềm">Phòng Phát triển Phần mềm</option>
-                <option value="Phòng Sản phẩm">Phòng Sản phẩm</option>
-                <option value="Phòng Phát triển Kinh doanh">Phòng Phát triển Kinh doanh</option>
-                <option value="Phòng Kinh doanh">Phòng Kinh doanh</option>
-                <option value="Văn phòng Hồ Chí Minh">Văn phòng Hồ Chí Minh</option>
-                <option value="Phòng Đối soát Vận hành">Phòng Đối soát Vận hành</option>
-                <option value="Phòng Chăm sóc Khách hàng">Phòng Chăm sóc Khách hàng</option>
-                <option value="Phòng Kế toán">Phòng Kế toán</option>
-                <option value="Phòng Hành chính Nhân sự">Phòng Hành chính Nhân sự</option>
+                {DEPARTMENTS.map((dept) => (
+                  <option key={dept} value={dept}>
+                    {dept}
+                  </option>
+                ))}
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-brand-textSecondary">
                 <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
