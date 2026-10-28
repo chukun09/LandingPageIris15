@@ -330,6 +330,7 @@ public static class AdminEndpoints
                 var state = await publishService.PublishAsync(
                     cleanOrderedIds,
                     tileAssignments.Count > 0 ? tileAssignments : null,
+                    request.TargetTileCount,
                     ct);
 
                 return TypedResults.Ok(state);
@@ -419,4 +420,5 @@ public sealed record ApproveAllResponse(int Count, string Message);
 /// </summary>
 public sealed record PublishMosaicRequest(
     List<int?>? OrderedPostIds = null,
-    Dictionary<int, int>? TileAssignments = null);
+    Dictionary<int, int>? TileAssignments = null,
+    int? TargetTileCount = null);

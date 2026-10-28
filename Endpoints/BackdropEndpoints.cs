@@ -27,6 +27,7 @@ public static class BackdropEndpoints
             IBackdropRenderer renderer,
             IPostService postService,
             IMosaicLayoutService layoutService,
+            IMosaicPublishService publishService,
             IOptions<BackdropOptions> options,
             [AsParameters] BackdropSpecQuery query,
             CancellationToken ct) =>
@@ -34,7 +35,7 @@ public static class BackdropEndpoints
             var spec = query.ToSpec(options.Value);
             var pre = await renderer.PreflightAsync(spec, ct);
             var posts = await postService.GetMosaicPostRefsAsync(ct);
-            var layout = layoutService.Build(posts);
+            var layout = await publishService.GetPublishedLayoutAsync(ct) ?? layoutService.Build(posts);
 
             ExistingBackdropFileDto? existingFile = null;
             var webRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
@@ -106,6 +107,7 @@ public static class BackdropEndpoints
             IBackdropJobQueue queue,
             IPostService postService,
             IMosaicLayoutService layoutService,
+            IMosaicPublishService publishService,
             IOptions<BackdropOptions> options,
             [AsParameters] BackdropSpecQuery query,
             [FromQuery] bool force,
@@ -113,7 +115,7 @@ public static class BackdropEndpoints
         {
             var spec = query.ToSpec(options.Value);
             var posts = await postService.GetMosaicPostRefsAsync(ct);
-            var layout = layoutService.Build(posts);
+            var layout = await publishService.GetPublishedLayoutAsync(ct) ?? layoutService.Build(posts);
             var specHash = spec.Hash();
 
             // Nếu không force: Kiểm tra queue đã hoàn thành

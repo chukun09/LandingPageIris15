@@ -26,11 +26,12 @@ public static class MosaicEndpoints
             IMosaicLayoutService layoutService,
             IMosaicPublishService publishService,
             [FromQuery] string? mode,
+            [FromQuery] int? targetCount,
             CancellationToken ct) =>
         {
-            // Ưu tiên bản bố cục đã xuất bản nếu không có yêu cầu đổi mode
+            // Ưu tiên bản bố cục đã xuất bản nếu không có yêu cầu đổi mode HOẶC targetCount tùy chọn
             MosaicLayout? layout = null;
-            if (string.IsNullOrWhiteSpace(mode))
+            if (string.IsNullOrWhiteSpace(mode) && !targetCount.HasValue)
             {
                 layout = await publishService.GetPublishedLayoutAsync(ct);
             }
@@ -50,7 +51,7 @@ public static class MosaicEndpoints
                 }
 
                 var posts = await postService.GetMosaicPostRefsAsync(ct);
-                layout = layoutService.Build(posts, requested);
+                layout = layoutService.Build(posts, requested, targetTileCount: targetCount);
             }
 
             // layoutId đã băm toàn bộ tham số + danh sách ảnh, nên dùng thẳng làm ETag.

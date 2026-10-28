@@ -340,6 +340,29 @@ public class MosaicLayoutTests
         Assert.Equal(-1, tile1.PostId); // ô không gán thì để trống
     }
 
+    [Theory]
+    [InlineData(55, 80)]   // 80 ảnh nhưng khóa 55 ô
+    [InlineData(100, 60)]  // 60 ảnh nhưng chọn 100 ô (có 40 ô trống thương hiệu)
+    [InlineData(150, 150)] // 150 ô
+    [InlineData(200, 50)]  // 50 ảnh nhưng chọn 200 ô
+    public void Explicit_target_tile_count_generates_exact_number_of_tiles(int targetTiles, int postCount)
+    {
+        var service = NewService();
+        var posts = Posts(postCount);
+
+        var layout = service.Build(posts, targetTileCount: targetTiles);
+
+        Assert.Equal(targetTiles, layout.Tiles.Count);
+        if (postCount < targetTiles)
+        {
+            Assert.Equal(targetTiles - postCount, layout.EmptyTileCount);
+        }
+        else
+        {
+            Assert.Equal(0, layout.EmptyTileCount);
+        }
+    }
+
     private static string Fingerprint(MosaicLayout layout) =>
         string.Join(';', layout.Tiles.Select(t =>
             $"{t.Index}:{t.Unit.X},{t.Unit.Y},{t.Unit.W},{t.Unit.H},{t.LetterId},{t.PostId},{t.Rank}"));

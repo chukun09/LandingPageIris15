@@ -51,7 +51,8 @@ public sealed class BackdropRenderer(
     IMosaicSourceCache sourceCache,
     IPostService postService,
     IWebHostEnvironment environment,
-    ILogger<BackdropRenderer> logger) : IBackdropRenderer
+    ILogger<BackdropRenderer> logger,
+    IMosaicPublishService? publishService = null) : IBackdropRenderer
 {
     private readonly BackdropOptions _o = options.Value;
 
@@ -84,7 +85,8 @@ public sealed class BackdropRenderer(
     public async Task<BackdropPreflight> PreflightAsync(BackdropSpec spec, CancellationToken ct)
     {
         var posts = await postService.GetMosaicPostRefsAsync(ct);
-        var layout = layoutService.Build(posts);
+        var layout = (publishService != null ? await publishService.GetPublishedLayoutAsync(ct) : null)
+                     ?? layoutService.Build(posts);
         var (minPhotos, _) = layoutService.Capacity();
 
         var originals = await postService.GetOriginalPathsAsync(ct);
@@ -137,7 +139,8 @@ public sealed class BackdropRenderer(
 
         progress.Report((0.02, "Đang lấy bố cục"));
         var posts = await postService.GetMosaicPostRefsAsync(ct);
-        var layout = layoutService.Build(posts);
+        var layout = (publishService != null ? await publishService.GetPublishedLayoutAsync(ct) : null)
+                     ?? layoutService.Build(posts);
         var originals = await postService.GetOriginalPathsAsync(ct);
         var infos = await sourceCache.IdentifyAsync(originals, ct);
 

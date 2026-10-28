@@ -16,7 +16,8 @@ public sealed record MosaicPublishedConfig(
     string? LayoutId,
     List<int> OrderedPostIds,
     int PhotoCount,
-    Dictionary<int, int>? TileAssignments = null);
+    Dictionary<int, int>? TileAssignments = null,
+    int? TargetTileCount = null);
 
 public sealed record MosaicPostAssignmentDto(
     int PostId,
@@ -34,12 +35,13 @@ public sealed record MosaicPublishStateDto(
     int PhotoCount,
     List<int> CurrentOrder,
     List<MosaicPostAssignmentDto> Assignments,
-    Dictionary<int, int>? TileAssignments = null);
+    Dictionary<int, int>? TileAssignments = null,
+    int? TargetTileCount = null);
 
 public interface IMosaicPublishService
 {
     Task<MosaicPublishStateDto> GetStateAsync(CancellationToken ct);
-    Task<MosaicPublishStateDto> PublishAsync(List<int> orderedPostIds, Dictionary<int, int>? tileAssignments, CancellationToken ct);
+    Task<MosaicPublishStateDto> PublishAsync(List<int> orderedPostIds, Dictionary<int, int>? tileAssignments, int? targetTileCount, CancellationToken ct);
     Task<MosaicPublishStateDto> ResetToDefaultAsync(CancellationToken ct);
     Task<MosaicLayout?> GetPublishedLayoutAsync(CancellationToken ct);
     Task<MosaicAtlas?> GetPublishedAtlasAsync(int tileSize, CancellationToken ct);
@@ -140,7 +142,12 @@ public sealed class MosaicPublishService : IMosaicPublishService
         }
 
         var tileAssignments = _cachedConfig?.TileAssignments;
-        var layout = _layoutService.Build(posts, customOrder: currentOrder, customTileAssignments: tileAssignments);
+        var targetTileCount = _cachedConfig?.TargetTileCount;
+        var layout = _layoutService.Build(
+            posts,
+            customOrder: currentOrder,
+            customTileAssignments: tileAssignments,
+            targetTileCount: targetTileCount);
         var assignments = BuildAssignments(layout);
 
         return new MosaicPublishStateDto(
@@ -150,12 +157,14 @@ public sealed class MosaicPublishService : IMosaicPublishService
             PhotoCount: posts.Count,
             CurrentOrder: currentOrder,
             Assignments: assignments,
-            TileAssignments: tileAssignments);
+            TileAssignments: tileAssignments,
+            TargetTileCount: targetTileCount);
     }
 
     public async Task<MosaicPublishStateDto> PublishAsync(
         List<int> orderedPostIds,
         Dictionary<int, int>? tileAssignments,
+        int? targetTileCount,
         CancellationToken ct)
     {
         await _lock.WaitAsync(ct);
@@ -176,11 +185,12 @@ public sealed class MosaicPublishService : IMosaicPublishService
                 }
             }
 
-            // 1. Dựng layout theo thứ tự và vị trí ô tùy chỉnh
+            // 1. Dựng layout theo thứ tự, vị trí ô tùy chỉnh và targetTileCount
             var layout = _layoutService.Build(
                 posts,
                 customOrder: finalOrder,
-                customTileAssignments: tileAssignments);
+                customTileAssignments: tileAssignments,
+                targetTileCount: targetTileCount);
 
             // 2. Render Atlas chất lượng cao (luôn sắp xếp theo Id để khớp tuyệt đối với idToAtlasSlot)
             var orderedForAtlas = posts.OrderBy(p => p.Id).ToList();
@@ -212,7 +222,8 @@ public sealed class MosaicPublishService : IMosaicPublishService
                 LayoutId: layout.LayoutId,
                 OrderedPostIds: finalOrder,
                 PhotoCount: posts.Count,
-                TileAssignments: tileAssignments);
+                TileAssignments: tileAssignments,
+                TargetTileCount: targetTileCount);
 
             if (_storageService != null)
             {
@@ -225,7 +236,7 @@ public sealed class MosaicPublishService : IMosaicPublishService
             _cachedLayout = layout;
             _hasInitialized = true;
 
-            _logger.LogInformation("Đã xuất bản thành công Bố cục Mosaic IRIS 15 (LayoutId: {LayoutId}, {Count} ảnh)", layout.LayoutId, posts.Count);
+            _logger.LogInformation("Đã xuất bản thành công Bố cục Mosaic IRIS 15 (LayoutId: {LayoutId}, {Count} ảnh, TargetTiles: {Target})", layout.LayoutId, posts.Count, targetTileCount);
 
             var assignments = BuildAssignments(layout);
             return new MosaicPublishStateDto(
@@ -235,7 +246,8 @@ public sealed class MosaicPublishService : IMosaicPublishService
                 PhotoCount: posts.Count,
                 CurrentOrder: finalOrder,
                 Assignments: assignments,
-                TileAssignments: tileAssignments);
+                TileAssignments: tileAssignments,
+                TargetTileCount: targetTileCount);
         }
         finally
         {
@@ -285,7 +297,8 @@ public sealed class MosaicPublishService : IMosaicPublishService
         _cachedLayout = _layoutService.Build(
             posts,
             customOrder: _cachedConfig.OrderedPostIds,
-            customTileAssignments: _cachedConfig.TileAssignments);
+            customTileAssignments: _cachedConfig.TileAssignments,
+            targetTileCount: _cachedConfig.TargetTileCount);
         return _cachedLayout;
     }
 

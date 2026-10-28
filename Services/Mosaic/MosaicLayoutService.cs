@@ -9,12 +9,13 @@ namespace LandingPageEvent.Services.Mosaic;
 
 public interface IMosaicLayoutService
 {
-    /// <summary>Dựng bố cục có đúng một ô cho mỗi ảnh.</summary>
+    /// <summary>Dựng bố cục có đúng một ô cho mỗi ảnh (hoặc số ô chỉ định bởi targetTileCount).</summary>
     MosaicLayout Build(
         IReadOnlyList<MosaicPostRef> posts,
         MosaicLayoutMode? modeOverride = null,
         IReadOnlyList<int>? customOrder = null,
-        IReadOnlyDictionary<int, int>? customTileAssignments = null);
+        IReadOnlyDictionary<int, int>? customTileAssignments = null,
+        int? targetTileCount = null);
 
     /// <summary>Số ô tối thiểu (và tối đa) mà bố cục hiện tại hỗ trợ.</summary>
     (int Min, int Max) Capacity(MosaicLayoutMode? modeOverride = null);
@@ -29,10 +30,14 @@ public sealed class MosaicLayoutService(IOptions<MosaicOptions> options) : IMosa
         IReadOnlyList<MosaicPostRef> posts,
         MosaicLayoutMode? modeOverride = null,
         IReadOnlyList<int>? customOrder = null,
-        IReadOnlyDictionary<int, int>? customTileAssignments = null)
+        IReadOnlyDictionary<int, int>? customTileAssignments = null,
+        int? targetTileCount = null)
     {
         var mode = modeOverride ?? _o.LayoutMode;
         int n = posts.Count;
+        int targetTiles = targetTileCount.HasValue && targetTileCount.Value >= 55
+            ? targetTileCount.Value
+            : n;
 
         // Nếu có thứ tự tùy chỉnh do Ban Tổ Chức (Admin) sắp xếp, tôn trọng thứ tự đó
         List<MosaicPostRef> ordered;
@@ -65,10 +70,10 @@ public sealed class MosaicLayoutService(IOptions<MosaicOptions> options) : IMosa
         // không đổi, và trình duyệt tiếp tục dùng bố cục cũ mãi mãi.
         var glyphSignature = ComputeGlyphSignature(mode);
 
-        var layoutId = ComputeLayoutId(mode, glyphSignature, ordered, customTileAssignments);
+        var layoutId = ComputeLayoutId(mode, glyphSignature, ordered, customTileAssignments, targetTileCount);
         if (_cache.TryGetValue(layoutId, out var cached)) return cached;
 
-        var (raster, tiles, unitsPerCap, minTiles) = Partition(mode, n);
+        var (raster, tiles, unitsPerCap, minTiles) = Partition(mode, targetTiles);
         var letters = BuildLetters(raster);
         var assigned = Assign(raster, tiles, ordered, posts, customTileAssignments);
 
@@ -76,7 +81,7 @@ public sealed class MosaicLayoutService(IOptions<MosaicOptions> options) : IMosa
             LayoutId: layoutId,
             GlyphVersion: _o.GlyphVersion,
             Mode: mode.ToString(),
-            PhotoCount: n,
+            PhotoCount: Math.Min(n, tiles.Count),
             MinTilesForShape: minTiles,
             Lattice: new LatticeInfo(unitsPerCap, raster.Rows, raster.Cols),
             Letters: letters,
@@ -287,12 +292,14 @@ public sealed class MosaicLayoutService(IOptions<MosaicOptions> options) : IMosa
         MosaicLayoutMode mode,
         string glyphSignature,
         List<MosaicPostRef> ordered,
-        IReadOnlyDictionary<int, int>? customTileAssignments = null)
+        IReadOnlyDictionary<int, int>? customTileAssignments = null,
+        int? targetTileCount = null)
     {
         var sb = new StringBuilder();
         sb.Append(_o.GlyphVersion).Append('|')
           .Append(glyphSignature).Append('|')
           .Append(mode).Append('|')
+          .Append(targetTileCount ?? 0).Append('|')
           .Append(_o.UnitsPerCap).Append('|')
           .Append(_o.StrokeUnits).Append('|')
           .Append(_o.MinTileUnits).Append('|')

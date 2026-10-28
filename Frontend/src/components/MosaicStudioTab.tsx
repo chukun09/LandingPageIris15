@@ -16,6 +16,7 @@ import {
   ZoomOut,
   ArrowLeftRight,
   HelpCircle,
+  LayoutGrid,
 } from 'lucide-react';
 import type { MosaicLayoutResponse, MosaicTile } from '../types/mosaic';
 
@@ -37,6 +38,7 @@ interface MosaicPublishState {
   currentOrder: number[];
   assignments: PostAssignment[];
   tileAssignments?: Record<number, number>;
+  targetTileCount?: number | null;
 }
 
 export interface MosaicApprovedPost {
@@ -83,6 +85,10 @@ export const MosaicStudioTab: React.FC<MosaicStudioTabProps> = ({
   const [selectedLetterFilter, setSelectedLetterFilter] = useState<string>('ALL');
   const [drawerSearch, setDrawerSearch] = useState('');
   const [drawerLetterFilter, setDrawerLetterFilter] = useState<string>('ALL');
+
+  // Chủ động chọn bố cục số ô ảnh (55, 100, 150, 200 hoặc tùy chỉnh)
+  const [selectedTargetCount, setSelectedTargetCount] = useState<number | null>(null);
+  const [customCountInput, setCustomCountInput] = useState<string>('');
 
   const boardScrollRef = useRef<HTMLDivElement>(null);
 
@@ -137,6 +143,12 @@ export const MosaicStudioTab: React.FC<MosaicStudioTabProps> = ({
       if (stateRes.ok) {
         const stateData: MosaicPublishState = await stateRes.json();
         setState(stateData);
+        if (stateData.targetTileCount !== undefined && stateData.targetTileCount !== null) {
+          setSelectedTargetCount(stateData.targetTileCount);
+        } else if (layoutData?.tiles?.length) {
+          setSelectedTargetCount(layoutData.tiles.length);
+        }
+
         if (stateData.currentOrder && stateData.currentOrder.length > 0) {
           currentOrder = stateData.currentOrder.filter((id) => typeof id === 'number' && id > 0);
         }
@@ -153,6 +165,8 @@ export const MosaicStudioTab: React.FC<MosaicStudioTabProps> = ({
             if (a.postId > 0) initialMap[a.rank] = a.postId;
           });
         }
+      } else if (layoutData?.tiles?.length) {
+        setSelectedTargetCount(layoutData.tiles.length);
       }
 
       // Nếu chưa có gán nào thì lấy từ layout.tiles
@@ -477,6 +491,76 @@ export const MosaicStudioTab: React.FC<MosaicStudioTabProps> = ({
     }
   };
 
+  // Thay đổi số ô mục tiêu (55, 100, 150, 200 hoặc nhập tùy ý >= 55)
+  const handleSelectTargetCount = async (target: number | null) => {
+    if (target !== null && target < 55) {
+      setFeedbackMsg({
+        type: 'error',
+        text: 'Bố cục chữ IRIS 15 yêu cầu tối thiểu 55 ô để bảo toàn trọn vẹn nét chữ!',
+      });
+      return;
+    }
+    if (target !== null && target > 500) {
+      setFeedbackMsg({
+        type: 'error',
+        text: 'Số lượng ô tối đa khuyến nghị là 500 ô để giữ kích thước ô rõ nét!',
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    setSelectedTargetCount(target);
+    try {
+      const url = target
+        ? `/api/mosaic/layout?targetCount=${target}&_t=${Date.now()}`
+        : `/api/mosaic/layout?_t=${Date.now()}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const newLayout: MosaicLayoutResponse = await res.json();
+      setLayout(newLayout);
+
+      // Cập nhật lại gán ô phù hợp với số ô mới
+      const validRanks = new Set(newLayout.tiles.map((t) => t.rank));
+      setTileAssignments((prev) => {
+        const next: Record<number, number> = {};
+        // Giữ lại các gán ô hợp lệ hiện có
+        Object.entries(prev).forEach(([rStr, pid]) => {
+          const r = Number(rStr);
+          if (validRanks.has(r) && pid > 0) {
+            next[r] = pid;
+          }
+        });
+
+        // Điền bài viết từ order cho các ô chưa được gán
+        const assignedPids = new Set(Object.values(next));
+        const unassignedPosts = order.filter((pid) => !assignedPids.has(pid));
+        newLayout.tiles.forEach((t) => {
+          if (next[t.rank] === undefined && unassignedPosts.length > 0) {
+            const nextPid = unassignedPosts.shift()!;
+            next[t.rank] = nextPid;
+            assignedPids.add(nextPid);
+          }
+        });
+
+        return next;
+      });
+
+      setSelectedRank(null);
+      setSelectedDrawerPostId(null);
+      setFeedbackMsg({
+        type: 'success',
+        text: `Đã chuyển sang bố cục ${target ?? approvedPosts.length} ô thành công! Bạn có thể xếp ảnh ngay bây giờ.`,
+      });
+    } catch (err: unknown) {
+      setFeedbackMsg({
+        type: 'error',
+        text: `Không thể tải bố cục: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Xuất bản bố cục lên CDN R2
   const handlePublish = async () => {
     if (approvedPosts.length === 0) return;
@@ -525,6 +609,7 @@ export const MosaicStudioTab: React.FC<MosaicStudioTabProps> = ({
         body: JSON.stringify({
           orderedPostIds,
           tileAssignments: cleanAssignments,
+          targetTileCount: selectedTargetCount,
         }),
       });
 
@@ -547,6 +632,9 @@ export const MosaicStudioTab: React.FC<MosaicStudioTabProps> = ({
 
       const updatedState: MosaicPublishState = await res.json();
       setState(updatedState);
+      if (updatedState.targetTileCount !== undefined) {
+        setSelectedTargetCount(updatedState.targetTileCount);
+      }
       if (updatedState.currentOrder) setOrder(updatedState.currentOrder);
       if (updatedState.tileAssignments) {
         setTileAssignments(updatedState.tileAssignments);
@@ -587,21 +675,50 @@ export const MosaicStudioTab: React.FC<MosaicStudioTabProps> = ({
     { id: 'N5', char: '5', tintRole: 'blue', printHex: '#38BDF8', order: 5 },
   ];
 
-  // Lọc ảnh trong khay
+  // Số lượng ảnh chưa được gán vào ô nào
+  const unassignedCount = useMemo(() => {
+    return approvedPosts.filter((p) => !postPlacementMap.has(p.id)).length;
+  }, [approvedPosts, postPlacementMap]);
+
+  // Lọc và sắp xếp ảnh trong khay: ƯU TIÊN ẢNH CHƯA GÁN (TRONG KHAY) LÊN ĐẦU
   const filteredDrawerPosts = useMemo(() => {
-    return approvedPosts.filter((p) => {
-      const matchSearch =
-        !drawerSearch ||
-        p.message.toLowerCase().includes(drawerSearch.toLowerCase()) ||
-        p.department.toLowerCase().includes(drawerSearch.toLowerCase()) ||
-        `#${p.id}`.includes(drawerSearch);
+    return approvedPosts
+      .filter((p) => {
+        const matchSearch =
+          !drawerSearch ||
+          p.message.toLowerCase().includes(drawerSearch.toLowerCase()) ||
+          p.department.toLowerCase().includes(drawerSearch.toLowerCase()) ||
+          `#${p.id}`.includes(drawerSearch);
 
-      if (!matchSearch) return false;
+        if (!matchSearch) return false;
 
-      if (drawerLetterFilter === 'ALL') return true;
-      const placement = postPlacementMap.get(p.id);
-      return placement?.tile?.letterId === drawerLetterFilter;
-    });
+        const placement = postPlacementMap.get(p.id);
+
+        if (drawerLetterFilter === 'ALL') return true;
+        if (drawerLetterFilter === 'UNASSIGNED') return !placement;
+        if (drawerLetterFilter === 'ASSIGNED') return !!placement;
+
+        return placement?.tile?.letterId === drawerLetterFilter;
+      })
+      .sort((a, b) => {
+        const isAssignedA = postPlacementMap.has(a.id);
+        const isAssignedB = postPlacementMap.has(b.id);
+
+        // 1. Ưu tiên ảnh chưa gán lên đầu
+        if (!isAssignedA && isAssignedB) return -1;
+        if (isAssignedA && !isAssignedB) return 1;
+
+        // 2. Cùng là ảnh chưa gán: sắp xếp theo lượt vote giảm dần, sau đó theo ID mới nhất
+        if (!isAssignedA && !isAssignedB) {
+          if (b.voteCount !== a.voteCount) return b.voteCount - a.voteCount;
+          return b.id - a.id;
+        }
+
+        // 3. Cùng là ảnh đã gán: sắp xếp theo rank tăng dần (VIP #1, #2, #3...)
+        const rankA = postPlacementMap.get(a.id)?.rank ?? 999999;
+        const rankB = postPlacementMap.get(b.id)?.rank ?? 999999;
+        return rankA - rankB;
+      });
   }, [approvedPosts, drawerSearch, drawerLetterFilter, postPlacementMap]);
 
   // Thông tin bài viết và ô đang được chọn hoặc hover
@@ -711,7 +828,106 @@ export const MosaicStudioTab: React.FC<MosaicStudioTabProps> = ({
         </AnimatePresence>
       </div>
 
-      {/* 2. Interactive Selection Guidance Bar */}
+      {/* 2. CHỦ ĐỘNG CHỌN BỐ CỤC SỐ Ô ẢNH (Target Tiles Selector) */}
+      <div className="bg-brand-surface border border-brand-border p-4 sm:p-5 rounded-2xl shadow-sm space-y-3">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-brand-border/60">
+          <div>
+            <h4 className="text-xs sm:text-sm font-extrabold text-brand-textPrimary flex items-center gap-2">
+              <LayoutGrid className="w-4 h-4 text-amber-400" />
+              <span>Chủ Động Chọn Bố Cục Số Ô Ảnh (IRIS 15)</span>
+              <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-brand-surfaceHover text-brand-primary border border-brand-border">
+                {layout?.tiles?.length || 55} ô hiện tại
+              </span>
+            </h4>
+            <p className="text-[11px] text-brand-textSecondary mt-0.5">
+              Chọn mẫu số ô cố định (55, 100, 150, 200 ô) hoặc nhập số tùy ý để mô hình chữ IRIS 15 tự chia ô và xếp ảnh tương ứng.
+            </p>
+          </div>
+
+          <div className="text-xs text-brand-textMuted flex items-center gap-2">
+            <span>Sức chứa:</span>
+            <span className="font-mono text-brand-textPrimary font-bold">
+              {Math.min(approvedPosts.length, layout?.tiles?.length || 55)} / {layout?.tiles?.length || 55} ô có ảnh
+            </span>
+            {(layout?.tiles?.length || 55) > approvedPosts.length && (
+              <span className="text-[10px] text-amber-400 font-semibold px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20">
+                +{(layout?.tiles?.length || 55) - approvedPosts.length} ô chờ ảnh
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Buttons Preset & Custom Input */}
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <span className="text-xs font-bold text-brand-textMuted mr-1">Mẫu số ô:</span>
+          {[55, 100, 150, 200].map((count) => {
+            const isActive = selectedTargetCount === count || (selectedTargetCount === null && layout?.tiles?.length === count);
+            return (
+              <button
+                key={count}
+                type="button"
+                disabled={isLoading}
+                onClick={() => handleSelectTargetCount(count)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  isActive
+                    ? 'bg-amber-400 text-slate-950 shadow-md shadow-amber-400/20 scale-[1.02]'
+                    : 'bg-brand-surface hover:bg-brand-surfaceHover border border-brand-border text-brand-textPrimary hover:border-amber-400/50'
+                }`}
+              >
+                <span>{count} ô</span>
+                {count === 55 && <span className="text-[9px] px-1 py-0.2 rounded bg-black/20 font-black">VIP</span>}
+              </button>
+            );
+          })}
+
+          <button
+            type="button"
+            disabled={isLoading}
+            onClick={() => handleSelectTargetCount(null)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              selectedTargetCount === null && !([55, 100, 150, 200].includes(layout?.tiles?.length || 0))
+                ? 'bg-amber-400 text-slate-950 shadow-md'
+                : 'bg-brand-surface hover:bg-brand-surfaceHover border border-brand-border text-brand-textPrimary hover:border-brand-primary'
+            }`}
+            title="Tự động co giãn số ô theo tổng số bài viết đã duyệt"
+          >
+            Tự động ({approvedPosts.length} ô)
+          </button>
+
+          {/* Custom Input */}
+          <div className="flex items-center gap-1.5 ml-auto">
+            <span className="text-xs text-brand-textMuted">Tùy chỉnh:</span>
+            <input
+              type="number"
+              min={55}
+              max={500}
+              placeholder="VD: 80"
+              value={customCountInput}
+              onChange={(e) => setCustomCountInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const val = parseInt(customCountInput, 10);
+                  if (!isNaN(val)) handleSelectTargetCount(val);
+                }
+              }}
+              className="w-20 px-2.5 py-1.5 bg-brand-bg border border-brand-border rounded-xl text-xs text-brand-textPrimary font-mono focus:outline-none focus:border-amber-400"
+            />
+            <button
+              type="button"
+              disabled={isLoading || !customCountInput}
+              onClick={() => {
+                const val = parseInt(customCountInput, 10);
+                if (!isNaN(val)) handleSelectTargetCount(val);
+              }}
+              className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-brand-surface hover:bg-brand-surfaceHover border border-brand-border text-brand-textPrimary hover:text-amber-400 transition-colors disabled:opacity-50"
+            >
+              Áp dụng
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. Interactive Selection Guidance Bar */}
       {(selectedRank !== null || selectedDrawerPostId !== null) && (
         <motion.div
           initial={{ opacity: 0, y: -8 }}
@@ -1023,14 +1239,23 @@ export const MosaicStudioTab: React.FC<MosaicStudioTabProps> = ({
       <div className="bg-brand-surface border border-brand-border p-4 sm:p-5 rounded-2xl space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-brand-border/60">
           <div>
-            <h4 className="text-xs sm:text-sm font-extrabold text-brand-textPrimary flex items-center gap-2">
+            <h4 className="text-xs sm:text-sm font-extrabold text-brand-textPrimary flex items-center gap-2 flex-wrap">
               <span>Kho Ảnh Kỷ Niệm Đã Duyệt</span>
               <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-brand-surfaceHover text-brand-textSecondary border border-brand-border">
                 {filteredDrawerPosts.length} / {approvedPosts.length} ảnh
               </span>
+              {unassignedCount > 0 ? (
+                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-amber-400" /> {unassignedCount} ảnh chưa gán (Trong khay)
+                </span>
+              ) : (
+                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Đã gán hết vào ô
+                </span>
+              )}
             </h4>
             <p className="text-[11px] text-brand-textSecondary mt-0.5">
-              Kéo ảnh từ khay này thả vào ô bất kỳ trên mô hình, hoặc nhấp ảnh rồi nhấp ô để gán vị trí.
+              Ảnh chưa gán được ưu tiên đưa lên đầu. Kéo ảnh từ khay này thả vào ô bất kỳ trên mô hình, hoặc nhấp ảnh rồi nhấp ô để gán vị trí.
             </p>
           </div>
 
@@ -1061,7 +1286,10 @@ export const MosaicStudioTab: React.FC<MosaicStudioTabProps> = ({
               onChange={(e) => setDrawerLetterFilter(e.target.value)}
               className="px-2.5 py-1.5 bg-brand-bg border border-brand-border rounded-xl text-xs text-brand-textPrimary font-semibold focus:outline-none focus:border-brand-primary"
             >
-              <option value="ALL">Mọi chữ cái</option>
+              <option value="ALL">Mọi ảnh ({approvedPosts.length})</option>
+              <option value="UNASSIGNED">⚡ Chưa gán ({unassignedCount})</option>
+              <option value="ASSIGNED">✓ Đã gán ({approvedPosts.length - unassignedCount})</option>
+              <option disabled>──────────</option>
               <option value="GI1">Chữ I (đầu)</option>
               <option value="GR">Chữ R</option>
               <option value="GI2">Chữ I (sau)</option>
