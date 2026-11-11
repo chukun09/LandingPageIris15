@@ -49,9 +49,36 @@ export interface MosaicApprovedPost {
   originalImagePath?: string;
   thumbnailUrl?: string;
   previewUrl?: string;
+  /** Tỉ lệ rộng/cao của ảnh; null hoặc 0 = chưa đo được. */
+  imageAspect?: number | null;
   voteCount: number;
   createdAt: string;
   isPinned?: boolean;
+}
+
+/**
+ * Cắt một ô atlas (trọn ảnh, ép vuông) vào ô có tỉ lệ `tileAspect` theo kiểu
+ * object-cover — cùng phép cắt mà shader của tường 3D và bản in đang dùng.
+ */
+function atlasSpriteStyle(
+  url: string,
+  cols: number,
+  rows: number,
+  slot: number,
+  photoAspect: number,
+  tileAspect: number,
+): React.CSSProperties {
+  const kx = Math.max(1, photoAspect / tileAspect);
+  const ky = Math.max(1, tileAspect / photoAspect);
+  // background-position tính theo % của phần chênh giữa ô và ảnh nền, nên phải chia cho (n·k − 1).
+  const pos = (index: number, k: number, n: number) =>
+    n * k > 1 ? ((index * k + (k - 1) / 2) / (n * k - 1)) * 100 : 0;
+  return {
+    backgroundImage: `url(${url})`,
+    backgroundRepeat: 'no-repeat',
+    backgroundSize: `${cols * kx * 100}% ${rows * ky * 100}%`,
+    backgroundPosition: `${pos(slot % cols, kx, cols)}% ${pos(Math.floor(slot / cols), ky, rows)}%`,
+  };
 }
 
 interface MosaicStudioTabProps {
@@ -110,6 +137,42 @@ export const MosaicStudioTab: React.FC<MosaicStudioTabProps> = ({
     approvedPosts.forEach((p) => map.set(p.id, p));
     return map;
   }, [approvedPosts]);
+
+  // Ảnh trong khung xếp lấy từ atlas của tường 3D: MỘT ảnh cho mọi ô. Nạp riêng
+  // 175 ảnh preview 1600px (hàng trăm triệu điểm ảnh phải giải mã) làm khung xếp giật nặng.
+  const approvedCount = approvedPosts.length;
+  const [atlas, setAtlas] = useState<{ url: string; cols: number; rows: number; count: number } | null>(null);
+  useEffect(() => {
+    let url = '';
+    let cancelled = false;
+    fetch('/api/mosaic/atlas?tileSize=128', { cache: 'no-cache' })
+      .then(async (res) => {
+        const [c, r] = (res.headers.get('X-Atlas-Grid') || '').split('x').map(Number);
+        const count = Number(res.headers.get('X-Atlas-Count'));
+        if (!res.ok || !c || !r) return;
+        const blob = await res.blob();
+        if (cancelled) return;
+        url = URL.createObjectURL(blob);
+        setAtlas({ url, cols: c, rows: r, count });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [approvedCount]);
+
+  // Slot atlas = thứ tự theo Id của các ảnh đã duyệt (xem MosaicAtlasService).
+  const atlasSlotById = useMemo(() => {
+    const map = new Map<number, number>();
+    approvedPosts
+      .map((p) => p.id)
+      .sort((a, b) => a - b)
+      .forEach((id, i) => map.set(id, i));
+    return map;
+  }, [approvedPosts]);
+  // Atlas dựng trên số ảnh khác với danh sách đang có thì slot lệch: quay về thumbnail.
+  const atlasReady = atlas !== null && atlas.count === approvedCount;
 
   // Tải trạng thái và bố cục hình học từ backend
   const loadData = useCallback(async () => {
@@ -1066,6 +1129,12 @@ export const MosaicStudioTab: React.FC<MosaicStudioTabProps> = ({
               const isDragOver = dragOverRank === t.rank;
               const isDimmed = selectedLetterFilter !== 'ALL' && t.letterId !== selectedLetterFilter;
               const isGold = t.letterId.startsWith('G');
+              const slot = post ? atlasSlotById.get(post.id) : undefined;
+              const photoAspect = post?.imageAspect ?? 0;
+              const spriteStyle =
+                atlasReady && atlas && slot !== undefined && photoAspect > 0
+                  ? atlasSpriteStyle(atlas.url, atlas.cols, atlas.rows, slot, photoAspect, t.u[2] / t.u[3])
+                  : null;
 
               // Tọa độ chuẩn hóa theo phần trăm
               const leftPct = (t.u[0] / cols) * 100;
@@ -1111,11 +1180,12 @@ export const MosaicStudioTab: React.FC<MosaicStudioTabProps> = ({
                         : 'border border-sky-500/50 bg-sky-950/30'
                     }`}
                   >
-                    {post ? (
+                    {post && spriteStyle ? (
+                      <div className="w-full h-full pointer-events-none" style={spriteStyle} />
+                    ) : post ? (
                       <img
-                        // Preview giữ nguyên tỉ lệ ảnh nên object-cover cắt đúng như tường 3D
-                        // và bản in; thumbnail đã cắt vuông sẵn sẽ hiện ảnh bị cắt hai lần.
-                        src={post.previewUrl || post.thumbnailUrl || post.thumbnailImagePath || '/placeholder.png'}
+                        // Chỉ dùng khi atlas chưa về: thumbnail đã cắt vuông nên ảnh trông bị cắt nhiều hơn thực tế.
+                        src={post.thumbnailUrl || post.thumbnailImagePath || '/placeholder.png'}
                         alt=""
                         className="w-full h-full object-cover pointer-events-none"
                         loading="lazy"
