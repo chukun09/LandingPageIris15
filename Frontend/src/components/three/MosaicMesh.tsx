@@ -70,7 +70,9 @@ export function MosaicMesh({
       array[i * 4 + 0] = geometry.slot[i];
       array[i * 4 + 1] = geometry.gold[i];
       array[i * 4 + 2] = 0; // reveal, chạy lên 1 khi atlas về
-      array[i * 4 + 3] = geometry.sizeX[i] / Math.max(0.0001, geometry.sizeY[i]);
+      // dáng ô ÷ dáng ảnh; stepMosaic cập nhật lại khi ô đổi dáng (contact sheet)
+      array[i * 4 + 3] =
+        geometry.sizeX[i] / Math.max(0.0001, geometry.sizeY[i]) / geometry.photoAspect[i];
     }
     tileAttribute.needsUpdate = true;
   }, [geometry, tileAttribute]);

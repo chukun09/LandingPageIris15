@@ -160,7 +160,8 @@ public static class MosaicEndpoints
                 LetterId: t.LetterId,
                 PostId: t.PostId,
                 Rank: t.Rank,
-                AtlasSlot: t.AtlasSlot));
+                AtlasSlot: t.AtlasSlot,
+                PhotoAspect: Math.Round(t.PhotoAspect, 3)));
         }
 
         return new MosaicLayoutResponse(

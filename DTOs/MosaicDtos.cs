@@ -4,6 +4,7 @@ namespace LandingPageEvent.DTOs;
 
 /// <param name="U">Hình chữ nhật trên lưới nguyên [x, y, w, h] — đây là nguồn chuẩn.</param>
 /// <param name="R">Bản chuẩn hoá [x, y, w, h] theo bề rộng lưới — tiện cho toạ độ world.</param>
+/// <param name="PhotoAspect">Tỷ lệ rộng/cao của ảnh trong ô (0 = chưa biết). Atlas chứa trọn ảnh, shader cần số này để cắt đúng một lần.</param>
 public sealed record MosaicTileDto(
     [property: JsonPropertyName("i")] int Index,
     [property: JsonPropertyName("u")] int[] U,
@@ -11,7 +12,8 @@ public sealed record MosaicTileDto(
     [property: JsonPropertyName("letterId")] string LetterId,
     [property: JsonPropertyName("postId")] int PostId,
     [property: JsonPropertyName("rank")] int Rank,
-    [property: JsonPropertyName("atlasSlot")] int AtlasSlot = -1);
+    [property: JsonPropertyName("atlasSlot")] int AtlasSlot = -1,
+    [property: JsonPropertyName("a")] double PhotoAspect = 0);
 
 public sealed record MosaicLetterDto(
     string Id,

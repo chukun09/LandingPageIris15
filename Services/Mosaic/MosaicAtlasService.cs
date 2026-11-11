@@ -39,6 +39,9 @@ public interface IMosaicAtlasService
 /// bao giờ được giải phóng, và vì material là mảng 6 phần tử trên BoxGeometry
 /// nên mỗi mesh tốn 6 lệnh vẽ. Một atlas đưa tất cả về 1 request và 1 lệnh vẽ.
 ///
+/// Mỗi ô atlas chứa TRỌN một ảnh, ép về hình vuông (không cắt). Tỷ lệ gốc của
+/// ảnh đi kèm bố cục, nên shader giãn ảnh lại rồi cắt đúng một lần theo dáng ô.
+///
 /// Ràng buộc quan trọng: atlas phải là luỹ thừa 2 và các ô phải căn theo lưới ô,
 /// để các mức mipmap từ 0 tới log2(tile) không trộn hai ô cạnh nhau.
 /// </summary>
@@ -86,7 +89,10 @@ public sealed class MosaicAtlasService(
         {
             if (_cache.TryGetValue(key, out cached)) return cached;
 
-            var atlas = await BuildAsync(tileSize, ordered, postService, key, ct);
+            // Không truyền ct của request: dựng từ preview mất hàng chục giây trên máy
+            // chủ nhỏ, người xem đầu tiên bỏ đi giữa chừng thì công dựng vẫn phải giữ
+            // lại cho người sau, nếu không atlas có thể không bao giờ dựng xong.
+            var atlas = await BuildAsync(tileSize, ordered, postService, key, CancellationToken.None);
 
             if (_cache.Count > 8) _cache.Clear();
             _cache[key] = atlas;
@@ -121,8 +127,9 @@ public sealed class MosaicAtlasService(
             Stream? stream = null;
             try
             {
-                stream = await postService.GetThumbnailStreamAsync(postId, ct)
-                         ?? await postService.GetPreviewStreamAsync(postId, ct);
+                // Preview giữ nguyên tỷ lệ gốc; thumbnail đã bị cắt vuông từ lúc upload.
+                stream = await postService.GetPreviewStreamAsync(postId, ct)
+                         ?? await postService.GetThumbnailStreamAsync(postId, ct);
 
                 if (stream == null) continue;
 
@@ -134,8 +141,12 @@ public sealed class MosaicAtlasService(
                         x.AutoOrient();
                         x.Resize(new ResizeOptions
                         {
+                            // Ép TRỌN ảnh vào ô vuông chứ không cắt: shader biết tỷ lệ
+                            // gốc và tỷ lệ ô trên tường nên tự giãn lại và chỉ cắt một
+                            // lần. Cắt vuông ở đây rồi cắt tiếp theo dáng ô là lý do ảnh
+                            // ngang từng chỉ còn thấy khoảng một phần ba.
                             Size = new Size(tileSize, tileSize),
-                            Mode = ResizeMode.Crop,
+                            Mode = ResizeMode.Stretch,
                             Sampler = KnownResamplers.Lanczos3,
                         });
                     });
@@ -168,7 +179,8 @@ public sealed class MosaicAtlasService(
 
     private static string BuildKey(int tileSize, List<MosaicPostRef> ordered)
     {
-        var sb = new StringBuilder().Append(tileSize).Append('|').Append(ordered.Count).Append('|');
+        // "full" = ô atlas chứa trọn ảnh; khác khoá với atlas cắt vuông đời trước.
+        var sb = new StringBuilder("full|").Append(tileSize).Append('|').Append(ordered.Count).Append('|');
         foreach (var p in ordered) sb.Append(p.Id).Append(',');
 
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString()));

@@ -15,5 +15,8 @@ public class MemoryPost
     public int VoteCount { get; set; }
     public bool IsApproved { get; set; }
     public bool IsPinned { get; set; } = false;
+
+    /// <summary>Tỷ lệ rộng/cao của ảnh (đã xoay đúng chiều). Null = chưa đo, 0 = không đo được.</summary>
+    public double? ImageAspect { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
 }

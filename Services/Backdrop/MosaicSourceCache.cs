@@ -20,7 +20,7 @@ public interface IMosaicSourceCache
         IReadOnlyDictionary<int, string> originalPaths, CancellationToken ct);
 
     /// <summary>
-    /// Trả về đường dẫn bản trung gian đã cắt vuông của một ảnh, tạo mới nếu chưa có.
+    /// Trả về đường dẫn bản trung gian (giữ nguyên tỷ lệ) của một ảnh, tạo mới nếu chưa có.
     /// Null nếu ảnh gốc không dùng được.
     /// </summary>
     Task<string?> GetOrCreateAsync(int postId, string originalRelativePath, CancellationToken ct);
@@ -30,8 +30,9 @@ public interface IMosaicSourceCache
 /// Bản trung gian của ảnh gốc dùng khi ghép backdrop.
 ///
 /// Lý do tồn tại: ghép trực tiếp từ ảnh gốc nghĩa là giải mã một ảnh 12 MP
-/// (~48 MB ở Rgba32) cho MỖI ô. Bản 1600×1600 chỉ tốn ~7.7 MB và vẫn dư độ phân
-/// giải cho ô lớn nhất trên bản in.
+/// (~48 MB ở Rgba32) cho MỖI ô. Bản cạnh dài 1600 chỉ tốn tối đa ~7.7 MB và vẫn
+/// dư độ phân giải cho ô lớn nhất trên bản in. Bản đệm GIỮ tỷ lệ gốc: ảnh chỉ bị
+/// cắt một lần, theo đúng dáng ô, lúc ghép lên tấm backdrop.
 /// </summary>
 public sealed class MosaicSourceCache(
     IOptions<BackdropOptions> options,
@@ -95,7 +96,8 @@ public sealed class MosaicSourceCache(
     public async Task<string?> GetOrCreateAsync(int postId, string originalRelativePath, CancellationToken ct)
     {
         Directory.CreateDirectory(CacheDir);
-        var name = $"{Path.GetFileNameWithoutExtension(originalRelativePath)}_{_o.SourceCacheEdgePx}.jpg";
+        // Hậu tố "f" tách khỏi bản đệm cắt vuông của đời trước còn nằm trên đĩa.
+        var name = $"{Path.GetFileNameWithoutExtension(originalRelativePath)}_{_o.SourceCacheEdgePx}f.jpg";
         var cached = Path.Combine(CacheDir, name);
 
         if (File.Exists(cached))
@@ -127,7 +129,7 @@ public sealed class MosaicSourceCache(
                     x.Resize(new ResizeOptions
                     {
                         Size = new Size(_o.SourceCacheEdgePx, _o.SourceCacheEdgePx),
-                        Mode = ResizeMode.Crop,
+                        Mode = ResizeMode.Max,
                         Sampler = KnownResamplers.Lanczos3,
                     });
                 });

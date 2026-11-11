@@ -61,7 +61,7 @@ export function createAtlasMaterial(map: THREE.Texture): AtlasMaterial {
         '#include <common>',
         /* glsl */ `
         #include <common>
-        attribute vec4 aTile;      // x=slot(-1 nếu không ảnh) y=gold z=reveal w=tỷ lệ khung ô
+        attribute vec4 aTile;      // x=slot(-1 nếu không ảnh) y=gold z=reveal w=dáng ô ÷ dáng ảnh
         // Màu thương hiệu đi bằng thuộc tính riêng thay vì instanceColor của
         // three: instanceColor được tạo lười ở lần setColorAt đầu tiên và việc
         // định nghĩa USE_INSTANCING_COLOR phụ thuộc thời điểm biên dịch shader.
@@ -95,8 +95,9 @@ export function createAtlasMaterial(map: THREE.Texture): AtlasMaterial {
         vReveal     = aTile.z;
         vBrand      = aBrand;
 
-        // Ô ảnh trong atlas là hình vuông còn ô trên tường có thể dẹt tới 2:1,
-        // nên cắt vào giữa thay vì kéo méo ảnh.
+        // Ô atlas chứa TRỌN ảnh, ép về hình vuông. aTile.w = dáng ô ÷ dáng ảnh:
+        // lớn hơn 1 thì ô dẹt hơn ảnh → cắt bớt trên dưới, ngược lại cắt hai bên.
+        // Ảnh chỉ bị cắt đúng một lần này.
         float aspect = max(aTile.w, 0.0001);
         vec2 crop = aspect >= 1.0 ? vec2(1.0, 1.0 / aspect) : vec2(aspect, 1.0);
         vec2 uvCropped = (uv - 0.5) * crop + 0.5;

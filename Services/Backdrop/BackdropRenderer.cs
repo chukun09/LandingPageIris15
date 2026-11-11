@@ -302,7 +302,7 @@ public sealed class BackdropRenderer(
                 Sampler = KnownResamplers.Lanczos3,
             }));
 
-            if (_o.Tint != TintMode.Off) ApplyToneAndTint(tile, tint);
+            if (job.Spec.Tint != TintMode.Off) ApplyToneAndTint(tile, tint, job.Spec.Tint);
             if (_o.TileBorderEnabled) DrawBorder(tile, tint, theme);
 
             canvas.Mutate(x => x.DrawImage(tile, rect.Location, 1f));
@@ -320,7 +320,7 @@ public sealed class BackdropRenderer(
     /// Đây là thứ làm chữ đọc được từ xa: ảnh ngẫu nhiên có độ sáng ngẫu nhiên,
     /// và chính phương sai độ sáng mới làm tan biên chữ chứ không phải màu sắc.
     /// </summary>
-    private void ApplyToneAndTint(Image<Rgb24> tile, Vector3 tint)
+    private void ApplyToneAndTint(Image<Rgb24> tile, Vector3 tint, TintMode mode)
     {
         double gain = 1.0;
 
@@ -342,7 +342,7 @@ public sealed class BackdropRenderer(
                 gain = Math.Clamp(_o.TargetLuma / mean, _o.LumaGainMin, _o.LumaGainMax);
         }
 
-        float strength = (float)(_o.Tint == TintMode.Strong ? _o.TintStrength * 1.6 : _o.TintStrength);
+        float strength = (float)(mode == TintMode.Strong ? _o.TintStrength * 1.6 : _o.TintStrength);
         strength = Math.Clamp(strength, 0f, 0.85f);
         float k = (float)Math.Clamp(_o.TintSaturation, 0.0, 1.0);
         float g = (float)gain * (1f - strength);
@@ -467,7 +467,9 @@ public sealed class BackdropRenderer(
             // Nền trắng quanh mã: mã QR trên nền tối rất khó quét.
             int pad = Math.Max(2, target / 12);
             using var plate = new Image<Rgb24>(cfg, target + pad * 2, target + pad * 2);
-            plate.Mutate(p => p.BackgroundColor(Color.White));
+            // BackgroundColor không tô được ảnh Rgb24 (xem FillSolid): tấm nền vẫn đen,
+            // thành một khung đen quanh mã QR trên bản nền sáng.
+            FillSolid(plate, Vector3.One);
             plate.Mutate(p => p.DrawImage(qr, new Point(pad, pad), 1f));
 
             canvas.Mutate(c => c.DrawImage(plate, new Point(x0 - pad, y0 - pad), 1f));

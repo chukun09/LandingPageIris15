@@ -1,7 +1,8 @@
 namespace LandingPageEvent.Models.Mosaic;
 
 /// <summary>Thông tin ảnh mà bộ sinh bố cục cần — không phụ thuộc vào EF entity.</summary>
-public readonly record struct MosaicPostRef(int Id, int VoteCount, DateTimeOffset CreatedAt);
+/// <param name="Aspect">Tỷ lệ rộng/cao của ảnh gốc; 0 nếu chưa biết.</param>
+public readonly record struct MosaicPostRef(int Id, int VoteCount, DateTimeOffset CreatedAt, double Aspect = 0);
 
 /// <summary>
 /// Vai trò màu của một chữ cái, lấy thẳng từ logo IRIS 15: bốn chữ IRIS màu vàng
@@ -30,13 +31,15 @@ public sealed record LatticeInfo(int UnitsPerCap, int Rows, int Cols);
 /// <param name="LetterId">Chữ cái mà ô thuộc về.</param>
 /// <param name="PostId">Ảnh được gán vào ô, -1 nếu chưa có.</param>
 /// <param name="Rank">Thứ hạng gán (0 = ảnh được ưu tiên nhất).</param>
+/// <param name="PhotoAspect">Tỷ lệ rộng/cao của ảnh trong ô; 0 nếu ô trống hoặc chưa biết.</param>
 public sealed record MosaicTile(
     int Index,
     LatticeRect Unit,
     string LetterId,
     int PostId,
     int Rank,
-    int AtlasSlot = -1)
+    int AtlasSlot = -1,
+    double PhotoAspect = 0)
 {
     public int AreaUnits => Unit.Area;
 }

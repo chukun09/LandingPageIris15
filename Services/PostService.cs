@@ -34,6 +34,7 @@ public sealed class PostService : IPostService
     private const string OriginalPathsKey = "PostService_OriginalPaths";
     private static readonly SemaphoreSlim _cacheLock = new(1, 1);
     private static readonly SemaphoreSlim _previewGenLock = new(1, 1);
+    private static readonly SemaphoreSlim _aspectLock = new(1, 1);
     // Ảnh gốc của bài cũ có thể tới 50 MP (nhận trước khi hạ trần 25 MP), vượt trần
     // 128 MB của luồng upload. Chỉ dùng bên trong _previewGenLock nên chạy tuần tự.
     private static SixLabors.ImageSharp.Configuration? s_legacyPreviewConfig;
@@ -480,7 +481,8 @@ public sealed class PostService : IPostService
                     p.VoteCount,
                     p.CreatedAt,
                     p.IsPinned,
-                    $"/api/posts/{p.Id}/preview"))
+                    $"/api/posts/{p.Id}/preview",
+                    p.ImageAspect))
                 .ToListAsync(ct);
 
             _cache.Set(ApprovedPostsKey, cached, TimeSpan.FromSeconds(10));
@@ -751,7 +753,60 @@ public sealed class PostService : IPostService
     {
         // Tận dụng dữ liệu đã cache ở RAM từ GetApprovedPostsAsync — 0 DB query thêm
         var approved = await GetApprovedPostsAsync(ct);
-        return approved.Select(p => new MosaicPostRef(p.Id, p.VoteCount, p.CreatedAt)).ToList();
+        if (approved.Any(p => p.ImageAspect is null))
+        {
+            await MeasureMissingAspectsAsync(ct);
+            approved = await GetApprovedPostsAsync(ct);
+        }
+        return approved.Select(p => new MosaicPostRef(p.Id, p.VoteCount, p.CreatedAt, p.ImageAspect ?? 0)).ToList();
+    }
+
+    /// <summary>
+    /// Đo tỷ lệ khung của các ảnh đã duyệt chưa có số đo rồi lưu vào DB — mỗi ảnh
+    /// chỉ đo một lần trong đời. Bộ chia ô khảm cần số này để tạo ô đúng dáng ảnh.
+    /// Đo từ bản preview vì đó chính là ảnh được vẽ vào atlas.
+    /// </summary>
+    private async Task MeasureMissingAspectsAsync(CancellationToken ct)
+    {
+        await _aspectLock.WaitAsync(ct);
+        try
+        {
+            var missing = (await GetApprovedPostsAsync(ct)).Where(p => p.ImageAspect is null).Select(p => p.Id).ToList();
+            if (missing.Count == 0) return; // request khác vừa đo xong
+
+            foreach (int id in missing)
+            {
+                double aspect = 0; // 0 = không đo được; vẫn lưu để không đo lại mãi
+                try
+                {
+                    using var stream = await GetPreviewStreamAsync(id, ct);
+                    var info = stream is null ? null : await Image.IdentifyAsync(_imagePolicy.Configuration, stream, ct);
+                    if (info is { Width: > 0, Height: > 0 })
+                    {
+                        // Hướng EXIF 5–8 nghĩa là ảnh được hiển thị xoay 90°.
+                        var orientation = info.Metadata.ExifProfile?
+                            .GetValue(SixLabors.ImageSharp.Metadata.Profiles.Exif.ExifTag.Orientation)?.Value ?? 1;
+                        aspect = orientation >= 5
+                            ? (double)info.Height / info.Width
+                            : (double)info.Width / info.Height;
+                    }
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    _logger.LogWarning(ex, "Không đo được tỷ lệ khung ảnh của bài đăng {Id}", id);
+                }
+
+                await _context.MemoryPosts
+                    .Where(p => p.Id == id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(p => p.ImageAspect, aspect), ct);
+            }
+
+            _cache.Remove(ApprovedPostsKey);
+        }
+        finally
+        {
+            _aspectLock.Release();
+        }
     }
 
     public async Task<IReadOnlyDictionary<int, string>> GetThumbnailPathsAsync(CancellationToken ct)

@@ -183,6 +183,7 @@ CREATE TABLE IF NOT EXISTS ""MemoryPosts"" (
 );
 
 ALTER TABLE ""MemoryPosts"" ADD COLUMN IF NOT EXISTS ""IsPinned"" boolean NOT NULL DEFAULT false;
+ALTER TABLE ""MemoryPosts"" ADD COLUMN IF NOT EXISTS ""ImageAspect"" double precision;
 
 CREATE INDEX IF NOT EXISTS ""IX_MemoryPosts_IsApproved_IsPinned_VoteCount_CreatedAt"" 
 ON ""MemoryPosts"" (""IsApproved"", ""IsPinned"" DESC, ""VoteCount"" DESC, ""CreatedAt"" DESC);
@@ -220,6 +221,14 @@ ON ""PodcastEpisodes"" (""PostId"");";
         catch
         {
             // Bỏ qua nếu cột IsPinned đã tồn tại trong SQLite
+        }
+        try
+        {
+            db.Database.ExecuteSqlRaw(@"ALTER TABLE ""MemoryPosts"" ADD COLUMN ""ImageAspect"" REAL;");
+        }
+        catch
+        {
+            // Bỏ qua nếu cột ImageAspect đã tồn tại trong SQLite
         }
         try
         {

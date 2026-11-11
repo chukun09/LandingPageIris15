@@ -73,7 +73,7 @@ public sealed class MosaicLayoutService(IOptions<MosaicOptions> options) : IMosa
         var layoutId = ComputeLayoutId(mode, glyphSignature, ordered, customTileAssignments, targetTileCount);
         if (_cache.TryGetValue(layoutId, out var cached)) return cached;
 
-        var (raster, tiles, unitsPerCap, minTiles) = Partition(mode, targetTiles);
+        var (raster, tiles, unitsPerCap, minTiles) = Partition(mode, targetTiles, posts.Select(p => p.Aspect).ToList());
         var letters = BuildLetters(raster);
         var assigned = Assign(raster, tiles, ordered, posts, customTileAssignments);
 
@@ -97,11 +97,7 @@ public sealed class MosaicLayoutService(IOptions<MosaicOptions> options) : IMosa
     {
         var mode = modeOverride ?? _o.LayoutMode;
         var raster = RasterizeFor(mode, _o.UnitsPerCap);
-        var seed = RectPartition.Seed(raster, _o.MaxTileAspect);
-
-        // Trần thực tế: tách tới khi không còn tách được nữa.
-        var maxed = RectPartition.SplitToN(seed, int.MaxValue, _o.MinTileUnits, _o.MaxTileAspect);
-        return (seed.Count, maxed.Count);
+        return RectPartition.CountRange(RectPartition.Seed(raster), _o.MinTileUnits, _o.MaxTileAspect);
     }
 
     /// <summary>
@@ -109,23 +105,29 @@ public sealed class MosaicLayoutService(IOptions<MosaicOptions> options) : IMosa
     /// của lưới hiện tại.
     /// </summary>
     private (GlyphRaster Raster, List<PartitionRect> Tiles, int UnitsPerCap, int MinTiles) Partition(
-        MosaicLayoutMode mode, int n)
+        MosaicLayoutMode mode, int n, IReadOnlyList<double> photoAspects)
     {
         int unitsPerCap = _o.UnitsPerCap;
 
         for (int escalation = 0; escalation <= _o.MaxLatticeEscalations; escalation++)
         {
             var raster = RasterizeFor(mode, unitsPerCap);
-            var seed = RectPartition.Seed(raster, _o.MaxTileAspect);
+            var seed = RectPartition.Seed(raster);
+            var (min, max) = RectPartition.CountRange(seed, _o.MinTileUnits, _o.MaxTileAspect);
 
-            // Dưới ngưỡng seed.Count thì hình bao không thể biểu diễn bằng ít
-            // hình chữ nhật hơn — tăng độ phân giải cũng không cứu được. Khi đó
-            // vẽ đủ hình chữ và để phần dư là ô thương hiệu (PostId = -1), thay
-            // vì từ chối dựng bố cục và bỏ trống cả khung 3D lúc đầu sự kiện.
-            int target = Math.Max(n, seed.Count);
+            // Dưới ngưỡng min thì hình bao không thể biểu diễn bằng ít hình chữ
+            // nhật hơn — tăng độ phân giải cũng không cứu được. Khi đó vẽ đủ
+            // hình chữ và để phần dư là ô thương hiệu (PostId = -1), thay vì từ
+            // chối dựng bố cục và bỏ trống cả khung 3D lúc đầu sự kiện.
+            int target = Math.Max(n, min);
 
-            var tiles = RectPartition.SplitToN(seed, target, _o.MinTileUnits, _o.MaxTileAspect);
-            if (tiles.Count == target) return (raster, tiles, unitsPerCap, seed.Count);
+            // Vượt dải liên tục thì coi như lưới này hết sức chứa, kể cả khi một
+            // vài giá trị lẻ phía trên vẫn tạo được — để hành vi không nhảy cóc.
+            if (target <= max)
+            {
+                var tiles = RectPartition.GridToN(seed, target, _o.MinTileUnits, _o.MaxTileAspect, photoAspects);
+                if (tiles.Count == target) return (raster, tiles, unitsPerCap, min);
+            }
 
             unitsPerCap *= 2; // lưới mịn hơn → trần số ô cao hơn
         }
@@ -176,7 +178,8 @@ public sealed class MosaicLayoutService(IOptions<MosaicOptions> options) : IMosa
 
     /// <summary>
     /// Gán ảnh vào ô: ô lớn nhận ảnh được yêu thích nhất, nhưng rải đều qua các
-    /// chữ cái để top ảnh không dồn hết vào một chữ.
+    /// chữ cái để top ảnh không dồn hết vào một chữ. Ảnh dọc xếp hàng riêng và
+    /// chỉ nhận ô dọc (ảnh ngang nhận ô ngang), để không ảnh nào bị cắt ngang thân.
     /// Nếu có chỉ định vị trí tùy chỉnh (customTileAssignments), ưu tiên gán chính xác theo cấu hình.
     /// </summary>
     private List<MosaicTile> Assign(
@@ -206,6 +209,11 @@ public sealed class MosaicLayoutService(IOptions<MosaicOptions> options) : IMosa
         }
 
         var validPostIds = new HashSet<int>(allPosts.Select(p => p.Id));
+        var aspectById = allPosts.ToDictionary(p => p.Id, p => p.Aspect);
+
+        // Hai hàng đợi theo dáng ảnh, mỗi hàng vẫn giữ nguyên thứ tự ưu tiên.
+        var portraitQueue = new FitQueue(orderedPosts.Where(p => RectPartition.IsPortrait(p.Aspect)));
+        var landscapeQueue = new FitQueue(orderedPosts.Where(p => !RectPartition.IsPortrait(p.Aspect)));
 
         var postIdByReadIndex = new int[tiles.Count];
         var rankByReadIndex = new int[tiles.Count];
@@ -223,9 +231,13 @@ public sealed class MosaicLayoutService(IOptions<MosaicOptions> options) : IMosa
             {
                 pid = assignedPid;
             }
-            else if (customTileAssignments == null && rank < orderedPosts.Count)
+            else if (customTileAssignments == null)
             {
-                pid = orderedPosts[rank].Id;
+                var rect = byPriority[rank].Tile.Rect;
+                var (own, other) = rect.W < rect.H ? (portraitQueue, landscapeQueue) : (landscapeQueue, portraitQueue);
+                double tileAspect = (double)rect.W / rect.H;
+                if (own.Count > 0) pid = own.Take(tileAspect);
+                else if (other.Count > 0) pid = other.Take(tileAspect);
             }
 
             if (pid > 0)
@@ -248,9 +260,49 @@ public sealed class MosaicLayoutService(IOptions<MosaicOptions> options) : IMosa
                 LetterId: raster.Glyphs[t.LetterIndex].Id,
                 PostId: postIdByReadIndex[i],
                 Rank: rankByReadIndex[i],
-                AtlasSlot: atlasSlotByReadIndex[i]));
+                AtlasSlot: atlasSlotByReadIndex[i],
+                PhotoAspect: aspectById.GetValueOrDefault(postIdByReadIndex[i])));
         }
         return result;
+    }
+
+    /// <summary>
+    /// Hàng đợi ảnh theo thứ tự ưu tiên, nhưng mỗi ô được chọn ảnh vừa khung
+    /// nhất trong vài ảnh đứng đầu — ảnh 16:9 nhận ô dẹt, ảnh 4:3 nhận ô gần vuông.
+    /// </summary>
+    private sealed class FitQueue(IEnumerable<MosaicPostRef> posts)
+    {
+        // Ảnh chỉ được nhường chỗ trong phạm vi này, nên thứ hạng bình chọn
+        // vẫn quyết định cỡ ô; dáng ảnh chỉ tinh chỉnh trong nhóm sát nhau.
+        private const int Window = 6;
+
+        private readonly List<MosaicPostRef> _items = posts.ToList();
+        private int _headSkips;
+
+        public int Count => _items.Count;
+
+        public int Take(double tileAspect)
+        {
+            int best = 0;
+            if (_headSkips < Window)
+            {
+                for (int i = 1; i < Math.Min(Window, _items.Count); i++)
+                    if (Visible(_items[i].Aspect, tileAspect) > Visible(_items[best].Aspect, tileAspect) + 1e-9)
+                        best = i;
+            }
+            _headSkips = best == 0 ? 0 : _headSkips + 1;
+
+            int id = _items[best].Id;
+            _items.RemoveAt(best);
+            return id;
+        }
+
+        /// <summary>Phần ảnh còn thấy khi ảnh phủ kín ô.</summary>
+        private static double Visible(double photoAspect, double tileAspect)
+        {
+            double p = photoAspect > 0 ? photoAspect : RectPartition.DefaultAspect;
+            return Math.Min(p / tileAspect, tileAspect / p);
+        }
     }
 
     /// <summary>Xen kẽ vòng tròn qua từng chữ cái, giữ nguyên thứ tự trong mỗi chữ.</summary>
@@ -309,7 +361,8 @@ public sealed class MosaicLayoutService(IOptions<MosaicOptions> options) : IMosa
           .Append(_o.LineGapUnits).Append('|')
           .Append(_o.LetterStratifiedAssignment).Append('|')
           .Append(ordered.Count).Append('|');
-        foreach (var p in ordered) sb.Append(p.Id).Append(',');
+        // Tỷ lệ khung ảnh quyết định cả cách chia ô lẫn cách gán, nên phải nằm trong mã băm.
+        foreach (var p in ordered) sb.Append(p.Id).Append(':').Append(p.Aspect.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)).Append(',');
 
         if (customTileAssignments != null && customTileAssignments.Count > 0)
         {

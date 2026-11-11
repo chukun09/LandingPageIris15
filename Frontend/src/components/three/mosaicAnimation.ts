@@ -5,6 +5,8 @@ export const ENTRANCE_DURATION = 1.9;
 export const ENTRANCE_DURATION_REDUCED = 0.35;
 export const TRANSITION_DURATION = 1.25;
 export const REVEAL_DURATION = 0.55;
+/** revealStart sau khi mọi ô đã hiện hẳn; khác -1 ("chờ lấy mốc") để không chạy lại. */
+const REVEAL_DONE = -2;
 
 export interface MosaicState {
   /** Thời điểm khung hình đầu tiên; lấy trong useFrame, không đọc lúc render. */
@@ -82,7 +84,10 @@ export function stepMosaic(
 
   const entering = age < entranceDuration;
   const transitioning = sinceMode < TRANSITION_DURATION;
-  const revealing = sinceReveal >= 0 && sinceReveal < REVEAL_DURATION;
+  // Chạy cho tới khi đã ghi giá trị cuối, chứ không chỉ trong khoảng thời lượng:
+  // nếu trình duyệt khựng quá REVEAL_DURATION đúng lúc atlas về (máy yếu, tab
+  // nền) thì không khung hình nào rơi vào khoảng đó và ảnh sẽ không bao giờ hiện.
+  const revealing = sinceReveal >= 0;
   const hovering = state.hoverActive.size > 0;
   const idling = !config.reducedMotion && state.mode === 0 && !entering;
   const wobbling = !config.reducedMotion && state.mode === 1 && !transitioning;
@@ -143,6 +148,15 @@ export function stepMosaic(
     let scaleY = tileH + (sheetSide - tileH) * blend;
     let z = entranceOffsetZ;
 
+    // Atlas chứa trọn ảnh ép vuông; shader cắt theo (dáng ô ÷ dáng ảnh). Ô đổi
+    // dáng khi chuyển sang contact sheet, nên tỷ lệ này phải đi theo — nếu không
+    // ảnh bị kéo méo trong ô vuông.
+    const fit = Math.fround(scaleX / Math.max(0.0001, scaleY) / geometry.photoAspect[i]);
+    if (tileArray[i * 4 + 3] !== fit) {
+      tileArray[i * 4 + 3] = fit;
+      tileDirty = true;
+    }
+
     // Vòng cung nhẹ trong lúc chuyển để hai trạng thái không trượt phẳng vào nhau.
     if (transitioning) z += Math.sin(blend * Math.PI) * depthRef * 0.25;
 
@@ -192,6 +206,8 @@ export function stepMosaic(
     _dummy.updateMatrix();
     mesh.setMatrixAt(i, _dummy.matrix);
   }
+
+  if (sinceReveal >= REVEAL_DURATION) state.revealStart = REVEAL_DONE;
 
   mesh.instanceMatrix.needsUpdate = true;
   if (tileDirty) tileAttribute.needsUpdate = true;

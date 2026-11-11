@@ -17,7 +17,8 @@ public sealed record MosaicPublishedConfig(
     List<int> OrderedPostIds,
     int PhotoCount,
     Dictionary<int, int>? TileAssignments = null,
-    int? TargetTileCount = null);
+    int? TargetTileCount = null,
+    int Engine = 0);
 
 public sealed record MosaicPostAssignmentDto(
     int PostId,
@@ -52,6 +53,17 @@ public sealed class MosaicPublishService : IMosaicPublishService
     private const string ConfigPath = "uploads/mosaic/published_config.json";
     private static readonly int[] SupportedTileSizes = [64, 128];
     private const int AtlasWidth = 2048;
+
+    /// <summary>
+    /// Đời của bộ chia ô. Vị trí ô do BTC gán được lưu theo thứ hạng ô, mà thứ
+    /// hạng chỉ có nghĩa trên đúng bộ ô đã sinh ra nó. Cấu hình xuất bản từ đời
+    /// khác vẫn giữ thứ tự ưu tiên và số ô, nhưng bỏ phần gán từng ô để bố cục
+    /// tự xếp lại theo dáng ảnh.
+    /// </summary>
+    private const int CurrentEngine = 2;
+
+    private Dictionary<int, int>? ActiveAssignments =>
+        _cachedConfig?.Engine == CurrentEngine ? _cachedConfig.TileAssignments : null;
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IMosaicLayoutService _layoutService;
@@ -141,7 +153,7 @@ public sealed class MosaicPublishService : IMosaicPublishService
             }
         }
 
-        var tileAssignments = _cachedConfig?.TileAssignments;
+        var tileAssignments = ActiveAssignments;
         var targetTileCount = _cachedConfig?.TargetTileCount;
         var layout = _layoutService.Build(
             posts,
@@ -223,7 +235,8 @@ public sealed class MosaicPublishService : IMosaicPublishService
                 OrderedPostIds: finalOrder,
                 PhotoCount: posts.Count,
                 TileAssignments: tileAssignments,
-                TargetTileCount: targetTileCount);
+                TargetTileCount: targetTileCount,
+                Engine: CurrentEngine);
 
             if (_storageService != null)
             {
@@ -297,7 +310,7 @@ public sealed class MosaicPublishService : IMosaicPublishService
         _cachedLayout = _layoutService.Build(
             posts,
             customOrder: _cachedConfig.OrderedPostIds,
-            customTileAssignments: _cachedConfig.TileAssignments,
+            customTileAssignments: ActiveAssignments,
             targetTileCount: _cachedConfig.TargetTileCount);
         return _cachedLayout;
     }
@@ -306,6 +319,15 @@ public sealed class MosaicPublishService : IMosaicPublishService
     {
         await EnsureInitializedAsync(ct);
         if (_cachedConfig?.IsPublished != true || string.IsNullOrEmpty(_cachedConfig.LayoutId))
+        {
+            return null;
+        }
+
+        // Atlas đã xuất bản chỉ khớp với đúng bố cục lúc xuất bản. Nếu bố cục
+        // hiện tại đã khác (có ảnh mới duyệt, hoặc bộ chia ô đổi đời) thì nhường
+        // cho atlas động, vốn luôn khớp với danh sách ảnh hiện có.
+        var layout = await GetPublishedLayoutAsync(ct);
+        if (layout?.LayoutId != _cachedConfig.LayoutId)
         {
             return null;
         }
@@ -385,8 +407,9 @@ public sealed class MosaicPublishService : IMosaicPublishService
                         x.AutoOrient();
                         x.Resize(new ResizeOptions
                         {
+                            // Ép trọn ảnh vào ô vuông, không cắt — xem MosaicAtlasService.
                             Size = new Size(tileSize, tileSize),
-                            Mode = ResizeMode.Crop,
+                            Mode = ResizeMode.Stretch,
                             Sampler = KnownResamplers.Lanczos3,
                         });
                     });

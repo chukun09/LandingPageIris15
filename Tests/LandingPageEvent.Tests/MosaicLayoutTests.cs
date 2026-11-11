@@ -363,6 +363,59 @@ public class MosaicLayoutTests
         }
     }
 
+    // ── Ô phải khớp dáng ảnh: đây là lý do bộ chia ô được viết lại ──────────
+
+    private static List<MosaicPostRef> PostsWithAspects(int n, Func<int, double> aspect) =>
+        Posts(n).Select((p, i) => p with { Aspect = aspect(i) }).ToList();
+
+    /// <summary>Phần ảnh còn thấy khi ảnh phủ kín ô, trung bình trên mọi ô.</summary>
+    private static double MeanVisible(MosaicLayout layout) =>
+        layout.Tiles.Average(t =>
+        {
+            double tile = (double)t.Unit.W / t.Unit.H;
+            return Math.Min(tile / t.PhotoAspect, t.PhotoAspect / tile);
+        });
+
+    [Theory]
+    [InlineData(100)]
+    [InlineData(150)]
+    [InlineData(200)]
+    public void Landscape_photos_get_landscape_tiles_and_stay_mostly_visible(int n)
+    {
+        // Bản cũ cho 140/150 ô dọc trong khi ảnh nằm ngang: mỗi ảnh chỉ còn thấy ~1/3.
+        var layout = NewService().Build(PostsWithAspects(n, i => i % 3 == 0 ? 4 / 3.0 : 1.5));
+
+        Assert.True(layout.Tiles.Count(t => t.Unit.W < t.Unit.H) <= n / 20, "Ảnh ngang mà vẫn sinh nhiều ô dọc.");
+        Assert.True(MeanVisible(layout) >= 0.85, $"Ảnh bị cắt quá nhiều: chỉ thấy {MeanVisible(layout):P0}.");
+    }
+
+    [Fact]
+    public void Each_portrait_photo_gets_a_portrait_tile()
+    {
+        var posts = PostsWithAspects(150, i => i % 7 == 0 ? 0.75 : 1.5);
+        var aspectById = posts.ToDictionary(p => p.Id, p => p.Aspect);
+
+        var layout = NewService().Build(posts);
+
+        Assert.All(layout.Tiles, t => Assert.Equal(aspectById[t.PostId], t.PhotoAspect));
+        Assert.All(
+            layout.Tiles.Where(t => t.PhotoAspect < 1),
+            t => Assert.True(t.Unit.W < t.Unit.H, $"Ảnh dọc {t.PostId} bị đặt vào ô ngang {t.Unit.W}×{t.Unit.H}."));
+        Assert.True(MeanVisible(layout) >= 0.85);
+    }
+
+    [Fact]
+    public void Layout_id_changes_when_a_photo_aspect_changes()
+    {
+        // Dáng ảnh quyết định cách chia ô; nếu layoutId đứng yên thì trình duyệt giữ bố cục cũ.
+        var service = NewService();
+
+        var a = service.Build(PostsWithAspects(150, _ => 1.5)).LayoutId;
+        var b = service.Build(PostsWithAspects(150, i => i == 0 ? 0.75 : 1.5)).LayoutId;
+
+        Assert.NotEqual(a, b);
+    }
+
     private static string Fingerprint(MosaicLayout layout) =>
         string.Join(';', layout.Tiles.Select(t =>
             $"{t.Index}:{t.Unit.X},{t.Unit.Y},{t.Unit.W},{t.Unit.H},{t.LetterId},{t.PostId},{t.Rank}"));

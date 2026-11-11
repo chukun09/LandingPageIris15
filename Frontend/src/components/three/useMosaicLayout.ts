@@ -42,6 +42,7 @@ function toGeometry(layout: MosaicLayoutResponse): MosaicGeometry {
   const centerY = new Float32Array(n);
   const sizeX = new Float32Array(n);
   const sizeY = new Float32Array(n);
+  const photoAspect = new Float32Array(n);
   const dist = new Float32Array(n);
   const jitter = new Float32Array(n);
   const slot = new Int32Array(n);
@@ -73,6 +74,7 @@ function toGeometry(layout: MosaicLayoutResponse): MosaicGeometry {
     centerY[i] = cy;
     sizeX[i] = uw;
     sizeY[i] = uh;
+    photoAspect[i] = t.a && t.a > 0 ? t.a : 1;
 
     // Nhân trục dọc để hiệu ứng toả ra theo hình elip hợp với chữ rất dẹt.
     const d = Math.hypot(cx, cy * 2.2);
@@ -100,6 +102,7 @@ function toGeometry(layout: MosaicLayoutResponse): MosaicGeometry {
     centerY,
     sizeX,
     sizeY,
+    photoAspect,
     dist,
     jitter,
     slot,

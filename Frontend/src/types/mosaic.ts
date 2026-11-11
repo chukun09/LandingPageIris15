@@ -25,6 +25,8 @@ export interface MosaicTile {
   rank: number;
   /** Chỉ số ô trong sprite atlas (ổn định theo Id, không đổi khi vote). */
   atlasSlot?: number;
+  /** Tỷ lệ rộng/cao của ảnh trong ô; 0 nếu ô trống hoặc chưa biết. */
+  a?: number;
 }
 
 export interface MosaicLayoutResponse {
@@ -57,6 +59,8 @@ export interface MosaicGeometry {
   /** Kích thước ô theo đơn vị lưới. */
   sizeX: Float32Array;
   sizeY: Float32Array;
+  /** Tỷ lệ rộng/cao của ảnh trong ô. Atlas chứa trọn ảnh nên shader cần số này để cắt đúng. */
+  photoAspect: Float32Array;
   /** Khoảng cách từ tâm hình chữ, dùng cho hiệu ứng toả tròn. */
   dist: Float32Array;
   /** Nhiễu tất định theo ô. */

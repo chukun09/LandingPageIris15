@@ -1113,7 +1113,9 @@ export const MosaicStudioTab: React.FC<MosaicStudioTabProps> = ({
                   >
                     {post ? (
                       <img
-                        src={post.thumbnailUrl || post.thumbnailImagePath || '/placeholder.png'}
+                        // Preview giữ nguyên tỉ lệ ảnh nên object-cover cắt đúng như tường 3D
+                        // và bản in; thumbnail đã cắt vuông sẵn sẽ hiện ảnh bị cắt hai lần.
+                        src={post.previewUrl || post.thumbnailUrl || post.thumbnailImagePath || '/placeholder.png'}
                         alt=""
                         className="w-full h-full object-cover pointer-events-none"
                         loading="lazy"
