@@ -436,7 +436,16 @@ public sealed class BackdropRenderer(
         int targetH = Math.Max(1, (int)Math.Round((double)logo.Height / logo.Width * targetW));
         logo.Mutate(x => x.Resize(targetW, targetH, KnownResamplers.Lanczos3));
 
-        canvas.Mutate(x => x.DrawImage(logo, new Point(bleed + safe, bleed + safe), 1f));
+        var at = new Point(bleed + safe, bleed + safe);
+        if (spec.Theme == BackdropTheme.Dark)
+        {
+            // Logo màu navy chìm trên nền tối: lót tấm nền trắng như mã QR.
+            int pad = Math.Max(2, targetW / 12);
+            using var plate = new Image<Rgb24>(cfg, targetW + pad * 2, targetH + pad * 2);
+            FillSolid(plate, Vector3.One);
+            canvas.Mutate(x => x.DrawImage(plate, new Point(at.X - pad, at.Y - pad), 1f));
+        }
+        canvas.Mutate(x => x.DrawImage(logo, at, 1f));
     }
 
     // ── Mã QR dẫn về trang gửi ảnh ─────────────────────────────────────────

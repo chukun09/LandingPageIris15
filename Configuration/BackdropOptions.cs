@@ -94,7 +94,7 @@ public sealed class BackdropOptions
 
     // ── Bố cục các khối trên tấm backdrop, tính theo tỷ lệ vùng an toàn ──────
     /// <summary>Bề rộng logo, theo tỷ lệ bề rộng vùng an toàn.</summary>
-    public double LogoWidthFraction { get; set; } = 0.16;
+    public double LogoWidthFraction { get; set; } = 0.10;
     public bool ShowLogo { get; set; } = true;
 
     /// <summary>Bề rộng dải chữ khảm, theo tỷ lệ bề rộng vùng an toàn.</summary>
@@ -157,5 +157,5 @@ public sealed class BackdropOptions
     public int MaxDegreeOfParallelism { get; set; } = 2;
 
     /// <summary>Đường dẫn tới file logo bản in chất lượng cao.</summary>
-    public string LogoPath { get; set; } = "Assets/brand/logo-print.png";
+    public string LogoPath { get; set; } = "Assets/brand/logo-print-orignal.png";
 }
