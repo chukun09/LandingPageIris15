@@ -41,7 +41,7 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
     return () => clearInterval(timer);
   }, [isOpen, isPlaying, posts.length]);
 
-  // Preload ảnh của slide tiếp theo để khi chuyển cảnh không bị trễ hay nhấp nháy đen
+  // Preload ảnh của slide tiếp theo để khi chuyển cảnh không bị trễ hay nhấp nháy
   useEffect(() => {
     if (!isOpen || posts.length <= 1) return;
     const nextIndex = (currentIndex + 1) % posts.length;
@@ -68,52 +68,57 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
 
   if (!isOpen || posts.length === 0) return null;
 
+  // Bảng màu sáng cố định (không theo toggle sáng/tối của trang): nền giấy ngà,
+  // chữ nâu than, điểm nhấn vàng champagne — dễ đọc trên màn LED hội trường.
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950 text-white flex flex-col justify-between overflow-hidden select-none">
-      {/* Background mờ chuyển động */}
-      <div className="absolute inset-0 opacity-25 pointer-events-none">
+    <div className="fixed inset-0 z-50 bg-[#FAF7F1] text-stone-900 flex flex-col justify-between overflow-hidden select-none">
+      {/* Nền: ảnh hiện tại phủ mờ rất nhẹ + quầng sáng vàng ấm */}
+      <div className="absolute inset-0 pointer-events-none">
         {activePost && (
           <img
             src={getPostImageUrl(activePost)}
             alt=""
-            className="w-full h-full object-cover blur-3xl scale-125"
+            className="w-full h-full object-cover blur-3xl scale-125 opacity-[0.14]"
             decoding="async"
           />
         )}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.9),transparent_60%)]" />
+        <div className="absolute -bottom-40 -left-40 w-[36rem] h-[36rem] rounded-full bg-amber-200/30 blur-3xl" />
+        <div className="absolute -top-40 -right-40 w-[32rem] h-[32rem] rounded-full bg-orange-100/50 blur-3xl" />
       </div>
 
       {/* Header sân khấu */}
-      <header className="relative z-10 p-3 sm:p-5 md:p-6 flex items-center justify-between gap-3 border-b border-white/10 bg-slate-950/60 backdrop-blur-md shrink-0">
-        <div className="flex items-center gap-2 sm:gap-4 min-w-0">
-          <div className="bg-white/95 rounded-xl px-2 py-1 sm:px-3 sm:py-1.5 shadow-md shrink-0">
-            <picture>
-              <source srcSet="/brand/logo-h480.webp" type="image/webp" />
-              <img
-                src="/brand/logo-h480.png"
-                alt="15th IRIS"
-                width={661}
-                height={480}
-                className="h-7 sm:h-10 md:h-12 w-auto object-contain"
-              />
-            </picture>
-          </div>
+      <header className="relative z-10 px-4 py-3 sm:px-6 sm:py-4 md:px-10 md:py-5 flex items-center justify-between gap-3 border-b border-stone-200/80 bg-white/70 backdrop-blur-md shrink-0">
+        <div className="flex items-center gap-3 sm:gap-5 min-w-0">
+          <picture className="shrink-0">
+            <source srcSet="/brand/logo-h480.webp" type="image/webp" />
+            <img
+              src="/brand/logo-h480.png"
+              alt="15th IRIS"
+              width={661}
+              height={480}
+              className="h-8 sm:h-11 md:h-14 w-auto object-contain"
+            />
+          </picture>
+          <div className="h-8 sm:h-10 w-px bg-gradient-to-b from-transparent via-amber-400/70 to-transparent shrink-0 hidden sm:block" />
           <div className="min-w-0">
-            <span className="text-[9px] sm:text-[11px] font-mono tracking-widest text-amber-400 font-bold uppercase hidden sm:block">
-              CHẾ ĐỘ SÂN KHẤU · ĐẠI LỄ KỶ NIỆM 15 NĂM
+            <span className="text-[9px] sm:text-[11px] font-mono tracking-[0.2em] text-amber-700 font-semibold uppercase hidden sm:block">
+              Chế độ sân khấu · Đại lễ kỷ niệm 15 năm
             </span>
-            <h1 className="text-sm sm:text-base md:text-xl font-black text-white leading-tight truncate">
+            <h1 className="text-sm sm:text-lg md:text-2xl font-black text-stone-900 leading-tight truncate">
               Vinh Danh Những Mảnh Ghép Kỳ Tích
             </h1>
           </div>
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-          <span className="font-mono text-[10px] sm:text-xs text-white/60 bg-white/10 px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg border border-white/10 whitespace-nowrap">
-            {currentIndex + 1}/{posts.length}
+          <span className="font-mono text-[10px] sm:text-sm text-stone-600 bg-white px-2.5 py-1 sm:px-3.5 sm:py-1.5 rounded-full ring-1 ring-stone-200 shadow-sm whitespace-nowrap">
+            <span className="font-bold text-amber-700">{currentIndex + 1}</span>
+            <span className="text-stone-400"> / {posts.length}</span>
           </span>
           <button
             onClick={onClose}
-            className="p-2 sm:p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
+            className="p-2 sm:p-2.5 rounded-full bg-white ring-1 ring-stone-200 shadow-sm hover:bg-stone-50 text-stone-600 hover:text-stone-900 transition-colors"
             title="Thoát chế độ sân khấu (Esc)"
           >
             <X className="w-5 h-5" />
@@ -122,69 +127,73 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
       </header>
 
       {/* Khu vực trình chiếu chính (Ken Burns Effect) */}
-      <main className="relative z-10 flex-1 flex items-center justify-center p-3 sm:p-5 md:p-8 min-h-0 overflow-y-auto">
+      <main className="relative z-10 flex-1 flex items-center justify-center p-3 sm:p-6 md:p-10 min-h-0 overflow-y-auto">
         <AnimatePresence mode="wait">
           {activePost && (
             <motion.div
               key={activePost.id}
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 1.05 }}
-              transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
-              className="max-w-5xl w-full max-h-full grid grid-cols-1 md:grid-cols-12 gap-4 sm:gap-6 md:gap-8 items-center bg-slate-900/80 border border-amber-500/30 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 shadow-2xl backdrop-blur-xl"
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -16 }}
+              transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+              className="relative max-w-6xl w-full max-h-full grid grid-cols-1 md:grid-cols-12 gap-4 sm:gap-6 md:gap-10 items-stretch bg-white rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 md:p-8 ring-1 ring-stone-200/80 shadow-[0_30px_80px_-24px_rgba(120,85,30,0.28)] overflow-hidden"
             >
+              {/* Viền vàng mảnh trên đỉnh thẻ */}
+              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-amber-300 via-amber-500 to-amber-300" />
+
               {/* Cột ảnh chất lượng cao với Ambient Fill cho mọi tỉ lệ ảnh */}
-              <div className="md:col-span-6 aspect-[4/3] max-h-[32vh] sm:max-h-[42vh] md:max-h-[56vh] rounded-xl sm:rounded-2xl overflow-hidden border border-amber-500/40 relative shadow-lg bg-slate-950 flex items-center justify-center shrink-0">
+              <div className="md:col-span-7 aspect-[4/3] max-h-[32vh] sm:max-h-[42vh] md:max-h-[60vh] rounded-xl sm:rounded-2xl overflow-hidden relative bg-stone-100 ring-1 ring-black/5 flex items-center justify-center shrink-0">
                 {/* Lớp nền mờ Ambient cho ảnh không đúng khung 4:3 */}
                 <img
                   src={getPostImageUrl(activePost)}
                   alt=""
-                  className="absolute inset-0 w-full h-full object-cover blur-md opacity-35 scale-110 pointer-events-none"
+                  className="absolute inset-0 w-full h-full object-cover blur-xl opacity-60 scale-110 pointer-events-none"
                   decoding="async"
                 />
                 <motion.img
                   src={getPostImageUrl(activePost)}
                   alt="Kỷ niệm"
-                  className="w-full h-full object-contain relative z-10"
+                  className="w-full h-full object-contain relative z-10 drop-shadow-md"
                   animate={{ scale: [1, 1.05] }}
                   transition={{ duration: 7, ease: 'linear' }}
                   decoding="async"
                 />
-                <div className="absolute top-2 left-2 sm:top-3 sm:left-3 bg-amber-500 text-slate-950 font-black text-[10px] sm:text-xs px-2.5 py-1 sm:px-3 rounded-full shadow z-20">
+                <div className="absolute top-2 left-2 sm:top-4 sm:left-4 bg-white/90 backdrop-blur text-amber-800 font-bold text-[10px] sm:text-xs px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full ring-1 ring-amber-200 shadow-sm z-20">
                   {activePost.department || 'Đại gia đình IRIS'}
                 </div>
               </div>
 
               {/* Cột nội dung lời chúc */}
-              <div className="md:col-span-6 flex flex-col justify-between h-full min-h-0 space-y-3 sm:space-y-4">
-                <div className="shrink-0 space-y-1 sm:space-y-1.5">
-                  <div className="flex items-center gap-2 text-amber-400">
+              <div className="md:col-span-5 flex flex-col justify-between min-h-0 gap-3 sm:gap-5 md:py-2">
+                <div className="shrink-0 space-y-2 sm:space-y-3">
+                  <div className="flex items-center gap-2 text-amber-700">
                     <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
-                    <span className="text-[10px] sm:text-xs font-mono font-bold tracking-wider">
+                    <span className="text-[10px] sm:text-xs font-mono font-semibold tracking-[0.18em]">
                       MẢNH GHÉP SỐ #{activePost.id}
                     </span>
                   </div>
-                  <h2 className="text-lg sm:text-xl md:text-2xl font-black text-white leading-tight">
+                  <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-stone-900 leading-tight">
                     Lời Chúc Tri Ân 15 Năm
                   </h2>
+                  <div className="h-0.5 w-16 rounded-full bg-gradient-to-r from-amber-500 to-amber-300" />
                 </div>
 
-                <div className="relative pl-4 sm:pl-6 border-l-2 border-amber-500/50 flex-1 min-h-0 overflow-y-auto max-h-[34vh] sm:max-h-[42vh] md:max-h-[48vh] pr-2 custom-scrollbar my-1">
-                  <span className="absolute -top-2 -left-2 sm:-top-3 sm:-left-3 text-4xl sm:text-5xl text-amber-400/20 font-serif select-none pointer-events-none">“</span>
-                  <p className={`text-slate-200 leading-relaxed italic whitespace-pre-line ${
+                <div className="relative flex-1 min-h-0 overflow-y-auto max-h-[34vh] sm:max-h-[42vh] md:max-h-[44vh] pr-2 custom-scrollbar">
+                  <span className="absolute -top-4 -left-1 text-6xl sm:text-7xl leading-none text-amber-300/70 font-serif select-none pointer-events-none">“</span>
+                  <p className={`relative pt-6 sm:pt-8 text-stone-700 leading-relaxed whitespace-pre-line ${
                     activePost.message.length > 350
-                      ? 'text-xs sm:text-sm md:text-base'
+                      ? 'text-sm sm:text-base md:text-lg'
                       : activePost.message.length > 180
-                        ? 'text-sm sm:text-base md:text-lg'
-                        : 'text-sm sm:text-base md:text-xl'
+                        ? 'text-base sm:text-lg md:text-xl'
+                        : 'text-base sm:text-xl md:text-2xl font-medium'
                   }`}>
                     {activePost.message.normalize('NFC')}
                   </p>
                 </div>
 
-                <div className="shrink-0 flex items-center justify-between pt-2 sm:pt-3 border-t border-white/10 text-[10px] sm:text-xs text-white/60 font-mono">
+                <div className="shrink-0 flex items-center justify-between pt-3 sm:pt-4 border-t border-stone-200 text-[10px] sm:text-xs text-stone-500 font-mono">
                   <div className="flex items-center gap-2">
-                    <Award className="w-4 h-4 text-amber-400 shrink-0" />
+                    <Award className="w-4 h-4 text-amber-600 shrink-0" />
                     <span>IRIS 15 Years of Pride</span>
                   </div>
                   <span>{new Date(activePost.createdAt).toLocaleDateString('vi-VN')}</span>
@@ -196,27 +205,27 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
       </main>
 
       {/* Thanh điều khiển dưới đáy */}
-      <footer className="relative z-10 p-3 sm:p-4 md:p-5 flex items-center justify-between gap-3 border-t border-white/10 bg-slate-950/60 backdrop-blur-md shrink-0">
+      <footer className="relative z-10 px-4 py-3 sm:px-6 sm:py-4 md:px-10 flex items-center justify-between gap-3 border-t border-stone-200/80 bg-white/70 backdrop-blur-md shrink-0">
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <button
             onClick={() => setCurrentIndex((p) => (p - 1 + posts.length) % posts.length)}
-            className="p-2.5 sm:p-3 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
+            className="p-2.5 sm:p-3 rounded-full bg-white ring-1 ring-stone-200 shadow-sm hover:bg-stone-50 text-stone-700 transition-colors"
             title="Trước"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
           <button
             onClick={() => setIsPlaying((p) => !p)}
-            className="p-2.5 sm:p-3 rounded-xl bg-amber-500 text-white hover:bg-amber-400 font-bold transition-colors flex items-center gap-2 shadow-sm"
+            className="px-3 py-2.5 sm:px-5 sm:py-3 rounded-full bg-amber-600 text-white hover:bg-amber-500 font-bold transition-colors flex items-center gap-2 shadow-md shadow-amber-600/25"
           >
             {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
-            <span className="text-xs font-mono hidden sm:inline">
+            <span className="text-xs font-mono tracking-wider hidden sm:inline">
               {isPlaying ? 'TẠM DỪNG' : 'TIẾP TỤC'}
             </span>
           </button>
           <button
             onClick={() => setCurrentIndex((p) => (p + 1) % posts.length)}
-            className="p-2.5 sm:p-3 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
+            className="p-2.5 sm:p-3 rounded-full bg-white ring-1 ring-stone-200 shadow-sm hover:bg-stone-50 text-stone-700 transition-colors"
             title="Sau"
           >
             <ChevronRight className="w-5 h-5" />
@@ -225,10 +234,10 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
 
         {/* Thanh tiến trình tự chạy */}
         <div className="hidden md:flex flex-1 max-w-md mx-8 items-center gap-3">
-          <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
+          <div className="flex-1 h-1.5 bg-stone-200 rounded-full overflow-hidden">
             <motion.div
               key={currentIndex}
-              className="h-full bg-amber-500"
+              className="h-full bg-gradient-to-r from-amber-400 to-amber-600 rounded-full"
               initial={{ width: '0%' }}
               animate={{ width: isPlaying ? '100%' : '0%' }}
               transition={{ duration: 7, ease: 'linear' }}
@@ -236,8 +245,8 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
           </div>
         </div>
 
-        <span className="text-[10px] sm:text-[11px] text-white/50 font-mono hidden sm:block text-right">
-          Nhấn Phím Cách để Dừng/Chạy · Phím Mũi tên để Chuyển ảnh
+        <span className="text-[10px] sm:text-[11px] text-stone-500 font-mono hidden sm:block text-right">
+          Phím Cách: Dừng/Chạy · Mũi tên: Chuyển ảnh · Esc: Thoát
         </span>
       </footer>
     </div>
