@@ -215,6 +215,16 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
   // đếm trong lúc thẻ cũ đang thoát rồi thanh tiến trình giật lùi khi biết thời lượng thật
   const [planReady, setPlanReady] = useState(false);
 
+  // Danh sách xếp bài mới lên đầu: BTC duyệt thêm bài trong lúc chiếu sẽ đẩy lệch
+  // chỉ số → bám theo id bài đang chiếu để slide không bị nhảy sang bài khác giữa chừng
+  const [prevPosts, setPrevPosts] = useState(posts);
+  if (prevPosts !== posts) {
+    setPrevPosts(posts);
+    const showingId = prevPosts.length > 0 ? prevPosts[currentIndex % prevPosts.length]?.id : undefined;
+    const sameIdIndex = posts.findIndex((p) => p.id === showingId);
+    if (sameIdIndex >= 0 && sameIdIndex !== currentIndex) setCurrentIndex(sameIdIndex);
+  }
+
   // Danh sách có thể co lại khi BTC gỡ bài trong lúc đang chiếu: chia lấy dư để không rơi ra ngoài mảng
   const safeIndex = posts.length > 0 ? currentIndex % posts.length : 0;
   const activePost = posts[safeIndex] || null;
@@ -275,6 +285,23 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
   const toProgress = useCallback((t: number) => Math.min(1, t / slideMs), [slideMs]);
   const progress = useClockMotion(clock, toProgress);
 
+  // Ẩn con trỏ chuột sau 2,5 giây không di chuyển để không nằm giữa màn LED
+  const [cursorHidden, setCursorHidden] = useState(false);
+  useEffect(() => {
+    if (!isVisible) return;
+    let timer = window.setTimeout(() => setCursorHidden(true), 2500);
+    const handleMove = () => {
+      setCursorHidden(false);
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => setCursorHidden(true), 2500);
+    };
+    window.addEventListener('mousemove', handleMove);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('mousemove', handleMove);
+    };
+  }, [isVisible]);
+
   // Khoá cuộn trang phía sau khi đang trình chiếu (chỉ khi thực sự có slide hiển thị)
   useEffect(() => {
     if (!isVisible) return;
@@ -320,7 +347,7 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
   // Bảng màu sáng cố định (không theo toggle sáng/tối của trang): nền giấy ngà,
   // chữ nâu than, điểm nhấn vàng champagne — dễ đọc trên màn LED hội trường.
   return (
-    <div className="fixed inset-0 z-50 bg-[#FAF7F1] text-stone-900 flex flex-col justify-between overflow-hidden select-none">
+    <div className={`fixed inset-0 z-50 bg-[#FAF7F1] text-stone-900 flex flex-col justify-between overflow-hidden select-none ${cursorHidden ? 'cursor-none' : ''}`}>
       {/* Nền: ảnh hiện tại phủ mờ rất nhẹ + quầng sáng vàng ấm */}
       <div className="absolute inset-0 pointer-events-none">
         {activePost && (
@@ -369,6 +396,7 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
             onClick={onClose}
             className="p-2 sm:p-2.5 rounded-full bg-white ring-1 ring-stone-200 shadow-sm hover:bg-stone-50 text-stone-600 hover:text-stone-900 transition-colors"
             title="Thoát chế độ sân khấu (Esc)"
+            aria-label="Thoát chế độ sân khấu"
           >
             <X className="w-5 h-5" />
           </button>
@@ -444,11 +472,13 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
             onClick={() => goTo(-1)}
             className="p-2.5 sm:p-3 rounded-full bg-white ring-1 ring-stone-200 shadow-sm hover:bg-stone-50 text-stone-700 transition-colors"
             title="Trước"
+            aria-label="Ảnh trước"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
           <button
             onClick={() => setIsPlaying((p) => !p)}
+            aria-label={isPlaying ? 'Tạm dừng trình chiếu' : 'Tiếp tục trình chiếu'}
             className="px-3 py-2.5 sm:px-5 sm:py-3 rounded-full bg-amber-600 text-white hover:bg-amber-500 font-bold transition-colors flex items-center gap-2 shadow-md shadow-amber-600/25"
           >
             {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
@@ -460,6 +490,7 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
             onClick={() => goTo(1)}
             className="p-2.5 sm:p-3 rounded-full bg-white ring-1 ring-stone-200 shadow-sm hover:bg-stone-50 text-stone-700 transition-colors"
             title="Sau"
+            aria-label="Ảnh sau"
           >
             <ChevronRight className="w-5 h-5" />
           </button>
