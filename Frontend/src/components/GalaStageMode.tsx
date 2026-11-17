@@ -24,38 +24,56 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
 
-  const activePost = posts[currentIndex] || null;
+  // Danh sách có thể co lại khi BTC gỡ bài trong lúc đang chiếu: chia lấy dư để không rơi ra ngoài mảng
+  const safeIndex = posts.length > 0 ? currentIndex % posts.length : 0;
+  const activePost = posts[safeIndex] || null;
 
   const getPostImageUrl = (post: Post | null): string => {
     if (!post) return '';
     return post.previewUrl || `/api/posts/${post.id}/preview`;
   };
 
+  // Hẹn giờ theo từng slide (không dùng setInterval) để khi bấm chuyển tay
+  // thì đếm lại đủ 7 giây, khớp với thanh tiến trình
   useEffect(() => {
     if (!isOpen || !isPlaying || posts.length === 0) return;
 
-    const timer = setInterval(() => {
+    const timer = setTimeout(() => {
       setCurrentIndex((prev) => (prev + 1) % posts.length);
     }, 7000); // 7 giây mỗi bức ảnh
 
-    return () => clearInterval(timer);
-  }, [isOpen, isPlaying, posts.length]);
+    return () => clearTimeout(timer);
+  }, [isOpen, isPlaying, posts.length, currentIndex]);
+
+  // Khoá cuộn trang phía sau khi đang trình chiếu (chỉ khi thực sự có slide hiển thị)
+  const isVisible = isOpen && posts.length > 0;
+  useEffect(() => {
+    if (!isVisible) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [isVisible]);
 
   // Preload ảnh của slide tiếp theo để khi chuyển cảnh không bị trễ hay nhấp nháy
   useEffect(() => {
     if (!isOpen || posts.length <= 1) return;
-    const nextIndex = (currentIndex + 1) % posts.length;
+    const nextIndex = (safeIndex + 1) % posts.length;
     const nextPost = posts[nextIndex];
     if (nextPost) {
       const img = new Image();
       img.src = getPostImageUrl(nextPost);
     }
-  }, [isOpen, currentIndex, posts]);
+  }, [isOpen, safeIndex, posts]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isVisible) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Chặn hành vi mặc định: Space đang focus vào nút sẽ "bấm" nút lần nữa
+      // (đảo play/pause hai lần thành không đổi) và mũi tên/Space làm cuộn khung
+      if ([' ', 'ArrowRight', 'ArrowLeft'].includes(e.key)) e.preventDefault();
       if (e.key === 'Escape') onClose();
       if (e.key === 'ArrowRight') setCurrentIndex((p) => (p + 1) % posts.length);
       if (e.key === 'ArrowLeft') setCurrentIndex((p) => (p - 1 + posts.length) % posts.length);
@@ -64,9 +82,11 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, posts.length, onClose]);
+  }, [isVisible, posts.length, onClose]);
 
   if (!isOpen || posts.length === 0) return null;
+
+  const message = (activePost?.message ?? '').normalize('NFC');
 
   // Bảng màu sáng cố định (không theo toggle sáng/tối của trang): nền giấy ngà,
   // chữ nâu than, điểm nhấn vàng champagne — dễ đọc trên màn LED hội trường.
@@ -113,7 +133,7 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
 
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <span className="font-mono text-[10px] sm:text-sm text-stone-600 bg-white px-2.5 py-1 sm:px-3.5 sm:py-1.5 rounded-full ring-1 ring-stone-200 shadow-sm whitespace-nowrap">
-            <span className="font-bold text-amber-700">{currentIndex + 1}</span>
+            <span className="font-bold text-amber-700">{safeIndex + 1}</span>
             <span className="text-stone-400"> / {posts.length}</span>
           </span>
           <button
@@ -127,7 +147,9 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
       </header>
 
       {/* Khu vực trình chiếu chính (Ken Burns Effect) */}
-      <main className="relative z-10 flex-1 flex items-center justify-center p-3 sm:p-6 md:p-10 min-h-0 overflow-y-auto">
+      {/* Căn giữa bằng my-auto thay cho items-center: khi màn thấp nội dung tràn
+          thì vẫn cuộn được từ mép trên, không bị cắt mất phần đầu thẻ */}
+      <main className="relative z-10 flex-1 flex justify-center p-3 sm:p-6 md:p-10 min-h-0 overflow-y-auto">
         <AnimatePresence mode="wait">
           {activePost && (
             <motion.div
@@ -136,13 +158,13 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -16 }}
               transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-              className="relative max-w-6xl w-full max-h-full grid grid-cols-1 md:grid-cols-12 gap-4 sm:gap-6 md:gap-10 items-stretch bg-white rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 md:p-8 ring-1 ring-stone-200/80 shadow-[0_30px_80px_-24px_rgba(120,85,30,0.28)] overflow-hidden"
+              className="relative my-auto max-w-6xl w-full grid grid-cols-1 md:grid-cols-12 gap-4 sm:gap-6 md:gap-10 md:items-center bg-white rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 md:p-8 ring-1 ring-stone-200/80 shadow-[0_30px_80px_-24px_rgba(120,85,30,0.28)]"
             >
-              {/* Viền vàng mảnh trên đỉnh thẻ */}
-              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-amber-300 via-amber-500 to-amber-300" />
+              {/* Vạch vàng mảnh giữa mép trên thẻ */}
+              <div className="absolute left-1/2 -translate-x-1/2 top-0 h-1 w-24 sm:w-32 rounded-b-full bg-gradient-to-r from-amber-300 via-amber-500 to-amber-300" />
 
               {/* Cột ảnh chất lượng cao với Ambient Fill cho mọi tỉ lệ ảnh */}
-              <div className="md:col-span-7 aspect-[4/3] max-h-[32vh] sm:max-h-[42vh] md:max-h-[60vh] rounded-xl sm:rounded-2xl overflow-hidden relative bg-stone-100 ring-1 ring-black/5 flex items-center justify-center shrink-0">
+              <div className="md:col-span-7 w-full aspect-[4/3] max-h-[32vh] sm:max-h-[42vh] md:max-h-[60vh] rounded-xl sm:rounded-2xl overflow-hidden relative bg-stone-100 ring-1 ring-black/5 flex items-center justify-center">
                 {/* Lớp nền mờ Ambient cho ảnh không đúng khung 4:3 */}
                 <img
                   src={getPostImageUrl(activePost)}
@@ -157,8 +179,10 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
                   animate={{ scale: [1, 1.05] }}
                   transition={{ duration: 7, ease: 'linear' }}
                   decoding="async"
+                  // Ảnh lỗi thì ẩn đi, chừa nền xám thay vì icon ảnh vỡ trên màn LED
+                  onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
                 />
-                <div className="absolute top-2 left-2 sm:top-4 sm:left-4 bg-white/90 backdrop-blur text-amber-800 font-bold text-[10px] sm:text-xs px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full ring-1 ring-amber-200 shadow-sm z-20">
+                <div className="absolute top-2 left-2 sm:top-4 sm:left-4 max-w-[calc(100%-1rem)] sm:max-w-[calc(100%-2rem)] truncate bg-white/90 backdrop-blur text-amber-800 font-bold text-[10px] sm:text-xs px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full ring-1 ring-amber-200 shadow-sm z-20">
                   {activePost.department || 'Đại gia đình IRIS'}
                 </div>
               </div>
@@ -179,15 +203,15 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
                 </div>
 
                 <div className="relative flex-1 min-h-0 overflow-y-auto max-h-[34vh] sm:max-h-[42vh] md:max-h-[44vh] pr-2 custom-scrollbar">
-                  <span className="absolute -top-4 -left-1 text-6xl sm:text-7xl leading-none text-amber-300/70 font-serif select-none pointer-events-none">“</span>
-                  <p className={`relative pt-6 sm:pt-8 text-stone-700 leading-relaxed whitespace-pre-line ${
-                    activePost.message.length > 350
+                  <span className="absolute top-0 -left-1 text-6xl sm:text-7xl leading-none text-amber-300/70 font-serif select-none pointer-events-none">“</span>
+                  <p className={`relative pt-6 sm:pt-8 text-stone-700 leading-relaxed whitespace-pre-line break-words ${
+                    message.length > 350
                       ? 'text-sm sm:text-base md:text-lg'
-                      : activePost.message.length > 180
+                      : message.length > 180
                         ? 'text-base sm:text-lg md:text-xl'
                         : 'text-base sm:text-xl md:text-2xl font-medium'
                   }`}>
-                    {activePost.message.normalize('NFC')}
+                    {message}
                   </p>
                 </div>
 
@@ -235,12 +259,14 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
         {/* Thanh tiến trình tự chạy */}
         <div className="hidden md:flex flex-1 max-w-md mx-8 items-center gap-3">
           <div className="flex-1 h-1.5 bg-stone-200 rounded-full overflow-hidden">
+            {/* Đổi key theo cả slide lẫn trạng thái chạy: tạm dừng thì về 0 ngay,
+                chạy tiếp thì đếm lại đủ 7 giây khớp với hẹn giờ ở trên */}
             <motion.div
-              key={currentIndex}
+              key={`${safeIndex}-${isPlaying}`}
               className="h-full bg-gradient-to-r from-amber-400 to-amber-600 rounded-full"
               initial={{ width: '0%' }}
               animate={{ width: isPlaying ? '100%' : '0%' }}
-              transition={{ duration: 7, ease: 'linear' }}
+              transition={{ duration: isPlaying ? 7 : 0, ease: 'linear' }}
             />
           </div>
         </div>
