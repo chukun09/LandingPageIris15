@@ -382,7 +382,7 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
               Chế độ sân khấu · Đại lễ kỷ niệm 15 năm
             </span>
             <h1 className="text-sm sm:text-lg md:text-2xl font-black text-stone-900 leading-tight truncate">
-              Vinh Danh Những Mảnh Ghép Kỳ Tích
+              Cùng Viết Tiếp Hành Trình
             </h1>
           </div>
         </div>
