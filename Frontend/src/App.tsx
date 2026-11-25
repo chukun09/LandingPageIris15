@@ -551,11 +551,11 @@ function App() {
           <div className="flex items-center gap-3">
             <div className="dark:bg-white/90 dark:rounded-xl dark:px-2 dark:py-1">
               <picture>
-                <source srcSet="/brand/logo-h120.webp" type="image/webp" />
+                <source srcSet="/brand/logo-original-h120.webp" type="image/webp" />
                 <img
-                  src="/brand/logo-h120.png"
+                  src="/brand/logo-original-h120.png"
                   alt="15th IRIS Logo"
-                  width={165}
+                  width={153}
                   height={120}
                   fetchPriority="high"
                   className="h-10 w-auto object-contain"

@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { Sparkles, Award } from 'lucide-react';
 import { fireCelebration } from './CelebrationConfetti';
 
-// Thiết lập mốc thời gian Đại lễ Gala 15 năm (tháng 10 năm 2026 hoặc ngày kỷ niệm công ty)
+// Thiết lập mốc thời gian đêm Gala 15 năm (tháng 10 năm 2026 hoặc ngày kỷ niệm công ty)
 const GALA_DATE = new Date('2026-11-28T18:00:00+07:00').getTime();
 
 interface TimeLeft {
@@ -50,7 +50,7 @@ export const GalaCountdown: React.FC = () => {
         <div className="space-y-2 text-center md:text-left">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-secondary/15 border border-brand-secondary/30 text-brand-secondary text-xs font-bold">
             <Award className="w-3.5 h-3.5" />
-            <span>ĐẠI LỄ GALA KỶ NIỆM 15 NĂM IRIS</span>
+            <span>Gala kỷ niệm 15 năm thành lập IRIS</span>
           </div>
           <h2 className="text-xl md:text-2xl font-black text-brand-textPrimary">
             Đếm ngược đến Đêm Hội <span className="gradient-text-gold">Hoàng Kim</span>

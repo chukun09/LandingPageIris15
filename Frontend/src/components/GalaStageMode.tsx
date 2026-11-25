@@ -367,11 +367,11 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
       <header className="relative z-10 px-4 py-3 sm:px-6 sm:py-4 md:px-10 md:py-5 flex items-center justify-between gap-3 border-b border-stone-200/80 bg-white/70 backdrop-blur-md shrink-0">
         <div className="flex items-center gap-3 sm:gap-5 min-w-0">
           <picture className="shrink-0">
-            <source srcSet="/brand/logo-h480.webp" type="image/webp" />
+            <source srcSet="/brand/logo-original-h480.webp" type="image/webp" />
             <img
-              src="/brand/logo-h480.png"
+              src="/brand/logo-original-h480.png"
               alt="15th IRIS"
-              width={661}
+              width={610}
               height={480}
               className="h-8 sm:h-11 md:h-14 w-auto object-contain"
             />
@@ -379,7 +379,7 @@ export const GalaStageMode: React.FC<GalaStageModeProps> = ({ posts, isOpen, onC
           <div className="h-8 sm:h-10 w-px bg-gradient-to-b from-transparent via-amber-400/70 to-transparent shrink-0 hidden sm:block" />
           <div className="min-w-0">
             <span className="text-[9px] sm:text-[11px] font-mono tracking-[0.2em] text-amber-700 font-semibold uppercase hidden sm:block">
-              Chế độ sân khấu · Đại lễ kỷ niệm 15 năm
+              Chế độ sân khấu · Kỷ niệm 15 năm thành lập
             </span>
             <h1 className="text-sm sm:text-lg md:text-2xl font-black text-stone-900 leading-tight truncate">
               Cùng Viết Tiếp Hành Trình
