@@ -617,7 +617,7 @@ function App() {
             <div className="space-y-2">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-secondary/15 border border-brand-secondary/30 text-brand-secondary font-mono text-[11px] font-bold">
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>2011 — 2026 · ĐẠI LỄ KỶ NIỆM 15 NĂM IRIS</span>
+                <span>2011 — 2026 · Kỷ niệm 15 năm thành lập IRIS</span>
               </div>
               <h1 className="font-display text-[1.8rem] sm:text-[2.5rem] md:text-[2.9rem] leading-[1.08] font-extrabold text-brand-textPrimary">
                 15 Năm Dệt Nên Kỳ Tích — <span className="gradient-text-gold">Bức Tường Kỷ Niệm Vàng</span>
