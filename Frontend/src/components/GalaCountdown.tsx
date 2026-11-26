@@ -3,8 +3,8 @@ import { motion } from 'motion/react';
 import { Sparkles, Award } from 'lucide-react';
 import { fireCelebration } from './CelebrationConfetti';
 
-// Thiết lập mốc thời gian đêm Gala 15 năm (tháng 10 năm 2026 hoặc ngày kỷ niệm công ty)
-const GALA_DATE = new Date('2026-11-28T18:00:00+07:00').getTime();
+// Thiết lập mốc thời gian đêm Gala 15 năm: 18h30 ngày 1/12/2026 (giờ Việt Nam)
+const GALA_DATE = new Date('2026-12-01T18:30:00+07:00').getTime();
 
 interface TimeLeft {
   days: number;
